@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote Import Prototype</title>
+<link rel="stylesheet" href="atlas.css">
+<style>
+	body { background: #fff; font-size: 0.875rem; min-height: 100vh; }
+	.label { text-transform: none; }
+	.reference-mark { font-size: 0.875rem; margin-left: 2px; }
+	.modal-content { overflow: visible; }
+	.lexicon-icon { display: inline-block; fill: currentColor; height: 1em; vertical-align: middle; width: 1em; }
+	.custom-control { min-height: 0; }
+	.custom-control-label:not(:empty) { padding-left: 8px; }
+
+	/* Prototype-only controls (not part of the product UI) */
+	.proto-bar { align-items: center; background: #272833; color: #fff; display: flex; flex-wrap: wrap; font-size: 0.8125rem; gap: 16px; padding: 8px 24px; }
+	.proto-bar .proto-tag { background: #ffb46e; border-radius: 4px; color: #272833; font-weight: 600; padding: 2px 8px; }
+	.proto-bar .btn-group .btn { font-size: 0.8125rem; padding: 2px 12px; }
+	.proto-bar .spacer { flex: 1; }
+	.remote-banner { background: #5aca75; border-radius: 4px; color: #272833; font-weight: 600; padding: 2px 8px; }
+	body.remote-mode .source-controls { display: none !important; }
+
+	/* Product top bar */
+	.top-bar { align-items: center; border-bottom: 1px solid #e7e7ed; display: flex; gap: 8px; height: 56px; padding: 0 16px; }
+	.top-bar h1 { font-size: 1rem; font-weight: 600; margin: 0; }
+	.top-bar .spacer { flex: 1; }
+	.avatar-wrap { position: relative; }
+	.avatar-button { align-items: center; background: linear-gradient(160deg, #f5c6cb 0%, #6b7a99 55%, #2e3a52 100%); border: 0; border-radius: 50%; color: #fff; display: flex; height: 36px; justify-content: center; padding: 0; width: 36px; }
+	.avatar-wrap .badge { font-size: 0.625rem; left: -6px; min-width: 16px; padding: 2px 4px; position: absolute; top: -4px; }
+	.dropdown-menu.notif-panel { left: auto; max-height: 440px; max-width: none; overflow-y: auto; padding: 0; right: 0; top: calc(100% + 8px); width: 400px; }
+	.notif-item { border-bottom: 1px solid #e7e7ed; cursor: pointer; display: flex; gap: 12px; padding: 12px 16px; }
+	.notif-item:hover { background: #f7f8f9; }
+	.notif-item.unread { background: #f0f5ff; }
+	.notif-item .notif-icon { font-size: 1.25rem; padding-top: 2px; }
+	.notif-item .notif-meta { color: #6b6c7e; font-size: 0.75rem; }
+
+	/* Lists (FDS) */
+	.fds-toolbar { align-items: center; border-bottom: 1px solid #e7e7ed; display: flex; gap: 16px; padding: 12px 24px; }
+	.fds-toolbar .search { flex: 1; }
+	.fds-toolbar .btn-unstyled { align-items: center; color: #6b6c7e; display: inline-flex; font-weight: 600; gap: 6px; }
+	.fds-body { padding: 24px; }
+	.fds-table { border: 1px solid #e7e7ed; border-radius: 4px; overflow: hidden; }
+	.fds-table table { margin: 0; }
+	.fds-table th, .fds-table td { border-left: 1px solid #e7e7ed; vertical-align: middle !important; }
+	.fds-table th:first-child, .fds-table td:first-child, .fds-table th:last-child, .fds-table td:last-child { border-left: 0; }
+	.fds-table th:nth-last-child(2), .fds-table td:nth-last-child(2) { border-right: 1px solid #e7e7ed; }
+	.author { align-items: center; display: inline-flex; gap: 8px; }
+	.author .sticker { background: #f1f2f5; color: #6b6c7e; font-size: 0.75rem; }
+	.progress-group { margin-top: 4px; max-width: 160px; }
+	tr.highlight td { background: #fff8e6 !important; }
+	.pagination-bar { margin-top: 16px; }
+
+	/* Export details */
+	.details { margin: 0 auto; max-width: 1180px; padding: 24px; }
+	.details-header { align-items: center; display: flex; gap: 12px; margin-bottom: 8px; }
+	.details-header h2 { font-size: 1.25rem; margin: 0; }
+	.details-header .spacer { flex: 1; }
+	.details .sheet { margin: 0 0 24px; max-width: none; padding-bottom: 24px; }
+	.details .sheet .section-title:first-child { margin-top: 0; }
+	.kv { display: grid; gap: 12px 24px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+	.kv dt { color: #6b6c7e; font-size: 0.75rem; font-weight: 600; margin-bottom: 2px; text-transform: uppercase; }
+	.kv dd { margin: 0; }
+	.content-table td, .content-table th { padding: 8px 12px !important; }
+	.proposal { background: #fff4ec; border: 1px dashed #ffb46e; border-radius: 4px; color: #b95000; font-size: 0.75rem; font-weight: 600; margin-left: 8px; padding: 1px 6px; text-transform: none; }
+
+	/* Modal */
+	.modal.mockup-open { display: block; }
+	.tag-select { position: relative; }
+	.tag-select .form-control-tag-group { align-items: center; cursor: text; display: flex; flex-wrap: wrap; gap: 6px; min-height: 40px; padding: 4px 40px 4px 12px; }
+	.tag-select .form-control-inset { background: transparent; border: 0; flex: 1; min-width: 24px; outline: none; }
+	.tag-select .clear-all { position: absolute; right: 8px; top: 8px; }
+	.chip { align-items: center; background: #fff; border: 1px solid #cdced9; border-radius: 4px; display: inline-flex; font-size: 0.8125rem; font-weight: 600; gap: 6px; padding: 1px 6px; }
+	.chip button { background: none; border: 0; color: #6b6c7e; line-height: 1; padding: 0; }
+	.tag-select .dropdown-menu { left: 0; max-width: none; right: 0; top: calc(100% + 4px); }
+	.tag-select .dropdown-item .hint { color: #6b6c7e; font-size: 0.75rem; margin-left: 6px; }
+	.section-title { border-bottom: 1px solid #cdced9; color: #6b6c7e; font-size: 0.8125rem; font-weight: 600; margin: 24px 0 16px; padding-bottom: 8px; text-transform: uppercase; }
+	.site-select-row { align-items: flex-start; display: flex; gap: 16px; margin-bottom: 16px; }
+	.site-select-row > label { flex: 0 0 84px; font-weight: 600; margin: 0; padding-top: 9px; }
+
+	/* Toasts */
+	.toast-stack { bottom: 24px; display: flex; flex-direction: column-reverse; gap: 8px; left: 24px; position: fixed; width: 492px; z-index: 2000; }
+	.toast-stack .alert { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); margin: 0; }
+	.toast-stack .destinations { margin: 8px 0 0; padding-left: 18px; }
+	.toast-stack .alert-indicator { margin-right: 8px; }
+
+	/* Instance Settings frame */
+	.settings { margin: 0 auto; max-width: 1180px; padding: 24px; }
+	.settings .breadcrumb { background: none; margin-bottom: 24px; padding: 0; }
+	.settings-layout { align-items: flex-start; display: flex; gap: 24px; }
+	.settings-nav { flex: 0 0 220px; }
+	.settings .sheet-title { margin-bottom: 4px; }
+	.btn-add { font-size: 0.75rem; line-height: 1.2; padding: 3px 8px; }
+	.settings-nav a { background: #f0f5ff; border-left: 3px solid #528eff; color: #272833; display: block; font-weight: 600; padding: 8px 16px; text-decoration: none; }
+	.settings-layout .sheet { flex: 1; margin: 0; max-width: none; }
+	.env-list { border: 1px solid #e7e7ed; border-radius: 4px; }
+	.env-item { align-items: flex-start; border-bottom: 1px solid #e7e7ed; display: flex; padding: 16px; }
+	.env-item:last-child { border-bottom: 0; }
+	.env-item .env-name { color: #272833; font-weight: 600; text-decoration: underline; }
+	.env-item .env-sites { color: #6b6c7e; margin: 4px 0; }
+	.site-row .site-gutter { align-items: center; display: flex; flex: 0 0 48px; justify-content: center; padding-top: 30px; }
+
+	/* Notes drawer */
+	.notes-drawer { background: #fff; border-left: 1px solid #e7e7ed; box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08); height: 100vh; overflow-y: auto; padding: 24px; position: fixed; right: 0; top: 0; width: 440px; z-index: 1500; }
+	.notes-drawer h3 { font-size: 0.875rem; margin-top: 20px; text-transform: uppercase; }
+	.notes-drawer li { font-size: 0.875rem; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none"><symbol id="ellipsis-v" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline ellipsis-v-dot-2" d="M319 255.5c0 35.346-28.654 64-64 64s-64-28.654-64-64c0-35.346 28.654-64 64-64s64 28.654 64 64z"/>
+	<path class="lexicon-icon-outline ellipsis-v-dot-3" d="M319 448c0 35.346-28.654 64-64 64s-64-28.654-64-64c0-35.346 28.654-64 64-64s64 28.654 64 64z"/>
+	<path class="lexicon-icon-outline ellipsis-v-dot-1" d="M319 64c0 35.346-28.654 64-64 64s-64-28.654-64-64c0-35.346 28.654-64 64-64s64 28.654 64 64z"/>
+</symbol><symbol id="reload" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline reload-arrow-down" d="M472.065 460.954l-80.854 2.365c67.538-47.63 108.976-125.482 108.976-208.888 0-97.148-53.904-184.701-140.685-228.505-11.483-5.768-25.463-1.169-31.231 10.286-5.795 11.483-1.197 25.463 10.286 31.257 71.020 35.856 115.142 107.487 115.142 186.987 0 68.947-34.659 133.269-90.981 172.129l-2.074-70.702c-0.372-12.838-11.19-23.23-23.921-22.566-12.838 0.372-22.938 11.084-22.566 23.921l3.854 131.462v0.027c0 0.027 0 0.027 0 0.027l0.027 0.478c0.372 12.599 10.685 22.566 23.23 22.566 0.239 0 0.478 0 0.691 0 0.904-0.027 1.647-0.452 2.525-0.585l128.964-3.774c12.838-0.372 22.938-11.084 22.566-23.921s-11.269-23.23-23.948-22.566z"/>
+	<path class="lexicon-icon-outline reload-arrow-up" d="M194.017 23.27c0-0.027 0-0.027 0-0.053v-0.478c-0.372-12.838-11.111-22.938-23.922-22.566-0.904 0.027-1.648 0.452-2.525 0.585l-128.99 3.774c-12.838 0.372-22.938 11.084-22.566 23.922 0.372 12.599 10.685 22.566 23.23 22.566 0.239 0 0.452 0 0.691 0l80.855-2.365c-67.538 47.63-108.976 125.508-108.976 208.889 0 97.149 53.903 184.701 140.685 228.505 3.349 1.702 6.937 2.498 10.446 2.498 8.506 0 16.692-4.678 20.785-12.785 5.794-11.483 1.196-25.463-10.286-31.231-71.020-35.856-115.142-107.488-115.142-186.987 0-68.947 34.66-133.269 90.981-172.129l2.073 70.701c0.372 12.599 10.685 22.566 23.23 22.566 0.239 0 0.478 0 0.691 0 12.838-0.372 22.938-11.083 22.566-23.922l-3.854-131.462 0.027-0.027z"/>
+</symbol><symbol id="download" viewBox="0 0 512 512">
+	<path class="download-arrow-down lexicon-icon-outline" d="M233.2,374.5c13.1,13.2,33.5,12.2,45.6,0l71.3-71.6c29.8-29.9-14.3-77.2-45.6-45.8l-16.6,16.7V32.1c0-42.5-63.7-43-63.7,0v241.7l-16.6-16.7c-30.8-30.9-75.5,15.8-45.6,45.8L233.2,374.5z"/>
+	<path class="download-border lexicon-icon-outline" d="M384,384.5v63.8H128v-63.8c0-43.8-64-41.8-64,0V512h384V384.5C448,340.7,384,341.7,384,384.5z"/>
+</symbol><symbol id="trash" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline lx-trash-body-border" d="M64.4,440.7c0,39.3,31.9,71.3,71.3,71.3h240.6c39.3,0,71.3-31.9,71.3-71.3v-312H64.4V440.7z M128.2,192.6h255.5v231.7c0,13.1-10.7,23.8-23.8,23.8H152c-13.1,0-23.8-10.7-23.8-23.8V192.6z"/>
+	<polygon class="lexicon-icon-outline lx-trash-lid" points="351.8,32.9 351.8,0 160.2,0 160.2,32.9 64.4,32.9 64.4,96.1 447.6,96.1 447.6,32.9 "/>
+	<rect class="lexicon-icon-outline lx-trash-line-2" x="287.9" y="223.6" width="63.9" height="191.6"/>
+	<rect class="lexicon-icon-outline lx-trash-line-1" x="160.2" y="223.6" width="63.9" height="191.6"/>
+</symbol><symbol id="times" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M301.1,256.1L502.3,54.9c30.1-30.1-16.8-73.6-45.2-45.2L255.9,210.8L54.6,9.7C24.6-20.4-19,26.5,9.4,54.9l201.2,201.2L9.3,457.3c-28.9,28.9,15.8,74.6,45.2,45.2l201.3-201.2l201.3,201.2c28.9,28.9,74.2-16.3,45.2-45.2L301.1,256.1z"/>
+</symbol><symbol id="times-small" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M301.1,256.1l137.2-137.2c30.1-30.1-16.8-73.6-45.2-45.2L255.9,210.8L118.6,73.7C88.6,43.6,45,90.5,73.4,118.9l137.2,137.2L73.3,393.3c-28.9,28.9,15.8,74.6,45.2,45.2l137.3-137.2l137.3,137.2c28.9,28.9,74.2-16.3,45.2-45.2L301.1,256.1z"/>
+</symbol><symbol id="check-circle-full" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M484.1,139.7c-54.4,62.6-167,190-203.8,233c-5.9,6.8-14.6,11.2-24.3,11.2c-8.8,0-16.8-3.6-22.6-9.4c-45.3-45.3-50.7-50.7-96-96c-5.8-5.8-9.4-13.8-9.4-22.6c0-17.7,14.3-32,32-32c8.8,0,16.8,3.6,22.6,9.4c35.6,35.6,46.6,46.6,71.6,71.6c47-54.8,150.9-171.7,192.5-219.7C399.8,32.9,331.8,0,256,0C114.6,0,0,114.6,0,256s114.6,256,256,256s256-114.6,256-256C512,214.1,501.9,174.6,484.1,139.7z"/>
+</symbol><symbol id="exclamation-full" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M256,0C114.6,0,0,114.6,0,256s114.6,256,256,256s256-114.6,256-256S397.4,0,256,0z M256,384c-17.7,0-32-14.3-32-32s14.3-32,32-32s32,14.3,32,32S273.7,384,256,384z M272,288h-32l-16-160h64L272,288z"/>
+</symbol><symbol id="warning-full" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M506.3,409.3l-214-353.7c-16.8-30.6-55.8-32.6-72.6,0L5.7,409.3C-8,436.5,5,480,42,480h428C506,480,522.5,436.5,506.3,409.3z M224,392c0-42.5,64-42,64,0C288,433.5,224,434.5,224,392z M288,288c0,42.5-64,40.5-64,0c0-20.4,0-83.6,0-104c0-43,64-43.5,64,0C288,204.4,288,267.6,288,288z"/>
+</symbol><symbol id="info-circle" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M437,75C388.7,26.6,324.4,0,256,0C187.6,0,123.3,26.6,75,75C26.6,123.3,0,187.6,0,256c0,68.4,26.6,132.7,75,181c48.4,48.4,112.6,75,181,75c68.4,0,132.7-26.6,181-75c48.4-48.4,75-112.6,75-181C512,187.6,485.4,123.3,437,75z M288,384c0,17.7-14.3,32-32,32c-17.7,0-32-14.3-32-32V224c0-17.7,14.3-32,32-32c17.7,0,32,14.3,32,32V384z M256,160c-17.7,0-32-14.3-32-32c0-17.7,14.3-32,32-32s32,14.3,32,32C288,145.7,273.7,160,256,160z"/>
+</symbol><symbol id="plus" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M479.82 224.002h-192.41v-191.91c0-17.6-14.4-32-32-32v0c-17.6 0-32 14.4-32 32v191.91h-191.41c-17.6 0-32 14.4-32 32v0c0 17.6 14.4 32 32 32h191.41v191.91c0 17.6 14.4 32 32 32v0c17.6 0 32-14.4 32-32v-191.909h192.41c17.6 0 32-14.4 32-32v0c0-17.6-14.4-32-32-32z"/>
+</symbol><symbol id="pencil" viewBox="0 0 512 512">
+	<path class="lexicon-icon-body" fill="none" d="M483,31C466.9,14.9,445.5,6,422.8,6s-44.1,8.9-60.2,24.9L4.1,389.4l4.4,115.3l119.9,1.2L483,151.4C516.2,118.2,516.2,64.2,483,31L483,31z"/>
+	<path class="lexicon-icon-outline" d="M483,31C466.9,14.9,445.5,6,422.8,6s-44.1,8.9-60.2,24.9L4.1,389.4l4.4,115.3l119.9,1.2L483,151.4C516.2,118.2,516.2,64.2,483,31L483,31z M105.1,449l-42-0.4l-1.4-36.5l274.4-274.4l40.1,40.1L105.1,449L105.1,449z M442.9,111.2l-26.4,26.4l-40.1-40.1l26.4-26.4c10.7-10.7,29.4-10.7,40.1,0C453.9,82.2,453.9,100.2,442.9,111.2z"/>
+</symbol><symbol id="search" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M503.254 467.861l-133.645-133.645c27.671-35.13 44.344-79.327 44.344-127.415 0-113.784-92.578-206.362-206.362-206.362s-206.362 92.578-206.362 206.362 92.578 206.362 206.362 206.362c47.268 0 90.735-16.146 125.572-42.969l133.851 133.851c5.002 5.002 11.554 7.488 18.106 7.488s13.104-2.486 18.106-7.488c10.004-10.003 10.004-26.209 0.029-36.183zM52.446 206.801c0-85.558 69.616-155.173 155.173-155.173s155.174 69.616 155.174 155.173-69.616 155.173-155.173 155.173-155.173-69.616-155.173-155.173z"/>
+</symbol><symbol id="angle-left" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M114.106 254.607c0.22 6.936 2.972 13.811 8.272 19.11l227.222 227.221c11.026 11.058 28.94 11.058 39.999 0 11.058-11.026 11.058-28.94 0-39.999l-206.333-206.333c0 0 206.333-206.333 206.333-206.333 11.058-11.059 11.058-28.973 0-39.999-11.058-11.059-28.973-11.059-39.999 0l-227.221 227.221c-5.3 5.3-8.052 12.174-8.273 19.111z"/>
+</symbol><symbol id="angle-right" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M396.394 255.607c-0.22-6.936-2.973-13.81-8.272-19.111l-227.221-227.221c-11.026-11.059-28.94-11.059-39.999 0-11.058 11.026-11.058 28.941 0 39.999l206.333 206.333c0 0-206.333 206.333-206.333 206.333-11.058 11.058-11.058 28.973 0 39.999 11.059 11.059 28.972 11.059 39.999 0l227.221-227.221c5.3-5.3 8.053-12.175 8.272-19.111z"/>
+</symbol><symbol id="caret-bottom" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M103.5,204.3l136.1,136.1c9,9,23.7,9,32.7,0l136.1-136.1c14.6-14.6,4.3-39.5-16.4-39.5H119.9C99.2,164.8,88.9,189.7,103.5,204.3L103.5,204.3z"/>
+</symbol><symbol id="shortcut" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline lx-shortcut-border" d="M480,320c-17.6729,0-32,14.3271-32,32v96H64V64h96c17.6729,0,32-14.3271,32-32S177.6729,0,160,0H64C28.7104,0,0,28.7104,0,64v384c0,35.29,28.7104,64,64,64h384c35.29,0,64-28.71,64-64v-96C512,334.3271,497.6729,320,480,320z"/>
+	<path class="lexicon-icon-outline lx-shortcut-arrow" d="M480,0H320c-17.6729,0-32,14.3267-32,32s14.3271,32,32,32h82.7456L265.373,201.3726c-12.4971,12.4971-12.4971,32.7578,0,45.2549C271.6211,252.876,279.8105,256,288,256s16.3789-3.124,22.627-9.3726L448,109.2544V192c0,17.6733,14.3271,32,32,32s32-14.3267,32-32V32C512,14.3267,497.6729,0,480,0z"/>
+</symbol><symbol id="list-ul" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline list-ul-item-2" d="M448 288h-288c-17.6 0-32-14.4-32-32v0c0-17.6 14.4-32 32-32h288c17.6 0 32 14.4 32 32v0c0 17.6-14.4 32-32 32z"/>
+	<path class="lexicon-icon-outline list-ul-item-3" d="M448 512h-288c-17.6 0-32-14.4-32-32v0c0-17.6 14.4-32 32-32h288c17.6 0 32 14.4 32 32v0c0 17.6-14.4 32-32 32z"/>
+	<path class="lexicon-icon-outline list-ul-item-1" d="M448 64h-288c-17.6 0-32-14.4-32-32v0c0-17.6 14.4-32 32-32h288c17.6 0 32 14.4 32 32v0c0 17.6-14.4 32-32 32z"/>
+	<path class="lexicon-icon-outline list-ul-bullet-2" d="M64 256c0 17.673-14.327 32-32 32s-32-14.327-32-32c0-17.673 14.327-32 32-32s32 14.327 32 32z"/>
+	<path class="lexicon-icon-outline list-ul-bullet-1" d="M64 32c0 17.673-14.327 32-32 32s-32-14.327-32-32c0-17.673 14.327-32 32-32s32 14.327 32 32z"/>
+	<path class="lexicon-icon-outline list-ul-bullet-3" d="M64 480c0 17.673-14.327 32-32 32s-32-14.327-32-32c0-17.673 14.327-32 32-32s32 14.327 32 32z"/>
+</symbol><symbol id="filter" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline filter-border" d="M448.1,89.9V156L256,316.1l0,0L63.9,156V89.9H448.1 M480.2,25.9H31.8c-17.7,0-32,14.3-32,32V186L192,346.1v108.3c0,18.6,18.5,40.8,46.3,28.6l64-32c10.8-5.4,17.7-16.5,17.7-28.6v-76.3L512.2,186V57.9C512.2,40.2,497.9,25.9,480.2,25.9L480.2,25.9z"/>
+</symbol><symbol id="order-arrow-down" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M161.5,367.9l71.6,71.6c11.9,10.8,32.9,11.2,45.8,0l71.6-71.6c29.8-33.6-15.8-74.9-45.8-45.8L288,338.8V96c0-42.5-64-42.5-64,0v242.8l-16.7-16.7C175.5,292.2,131.8,337,161.5,367.9z"/>
+</symbol><symbol id="list" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline list-li-bullet-1" d="M96.037 0h-64c-17.664 0-32 14.336-32 32s14.336 32 32 32h64c17.664 0 32-14.336 32-32s-14.336-32-32-32z"/>
+	<path class="lexicon-icon-outline list-li-bullet-2" d="M96.037 224h-64c-17.664 0-32 14.336-32 32s14.336 32 32 32h64c17.664 0 32-14.336 32-32s-14.336-32-32-32z"/>
+	<path class="lexicon-icon-outline list-li-bullet-3" d="M96.037 448h-64c-17.664 0-32 14.336-32 32s14.336 32 32 32h64c17.664 0 32-14.336 32-32s-14.336-32-32-32z"/>
+	<path class="lexicon-icon-outline list-li-item-2" d="M480 288h-256c-17.6 0-32-14.4-32-32v0c0-17.6 14.4-32 32-32h256c17.6 0 32 14.4 32 32v0c0 17.6-14.4 32-32 32z"/>
+	<path class="lexicon-icon-outline list-li-item-1" d="M480 64h-256c-17.6 0-32-14.4-32-32v0c0-17.6 14.4-32 32-32h256c17.6 0 32 14.4 32 32v0c0 17.6-14.4 32-32 32z"/>
+	<path class="lexicon-icon-outline list-li-item-3" d="M480 512h-256c-17.6 0-32-14.4-32-32v0c0-17.6 14.4-32 32-32h256c17.6 0 32 14.4 32 32v0c0 17.6-14.4 32-32 32z"/>
+</symbol><symbol id="caret-double" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline caret-double-top" d="M407.139 151.999l-136.136-136.136c-9.036-9.037-23.688-9.037-32.725 0l-136.136 136.136c-14.577 14.577-4.253 39.501 16.362 39.501h272.272c20.615 0 30.94-24.924 16.362-39.501z"/>
+	<path class="lexicon-icon-outline caret-double-bottom" d="M103.18 359.002l136.136 136.136c9.036 9.036 23.688 9.036 32.724 0l136.136-136.136c14.577-14.577 4.253-39.502-16.362-39.502h-272.272c-20.615 0-30.939 24.925-16.362 39.502z"/>
+</symbol><symbol id="grid" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline grid-square-3" d="M495.965 0.018h-95.993c-8.813 0-15.981 7.168-15.981 16.017v95.993c0 8.85 7.168 16.017 16.017 16.017h95.993c8.849 0 16.017-7.168 16.017-16.017v-95.993c-0.037-8.85-7.204-16.017-16.054-16.017z"/>
+	<path class="lexicon-icon-outline grid-square-4" d="M112.028 192.005h-95.993c-8.85 0-16.017 7.167-16.017 16.017v95.993c0 8.849 7.168 16.017 16.017 16.017h95.993c8.85 0 15.981-7.168 15.981-16.017v-95.993c0-8.85-7.168-16.017-15.981-16.017z"/>
+	<path class="lexicon-icon-outline grid-square-5" d="M303.978 192.005h-95.993c-8.85 0-16.017 7.167-16.017 16.017v95.993c0 8.849 7.167 16.017 16.017 16.017h95.993c8.849 0 16.017-7.168 16.017-16.017v-95.993c0-8.85-7.168-16.017-16.017-16.017z"/>
+	<path class="lexicon-icon-outline grid-square-6" d="M495.965 192.005h-95.993c-8.849 0-16.017 7.167-16.017 16.017v95.993c0 8.849 7.168 16.017 16.017 16.017h95.993c8.849 0 16.017-7.168 16.017-16.017v-95.993c0-8.85-7.168-16.017-16.017-16.017z"/>
+	<path class="lexicon-icon-outline grid-square-7" d="M112.028 383.991h-95.993c-8.85 0-16.017 7.168-16.017 16.017v95.993c0 8.813 7.168 15.981 16.017 15.981h95.993c8.85 0 15.981-7.168 15.981-16.017v-95.993c0-8.813-7.168-15.981-15.981-15.981z"/>
+	<path class="lexicon-icon-outline grid-square-8" d="M303.978 383.991h-95.993c-8.85 0-16.017 7.168-16.017 16.017v95.993c0 8.849 7.167 16.017 16.017 16.017h95.993c8.849 0 16.017-7.168 16.017-16.017v-95.993c0-8.849-7.168-16.017-16.017-16.017z"/>
+	<path class="lexicon-icon-outline grid-square-9" d="M495.965 383.991h-95.993c-8.849 0-16.017 7.168-16.017 16.017v95.993c0 8.849 7.168 16.017 16.017 16.017h95.993c8.849-0.037 16.017-7.204 16.017-16.054v-95.993c0-8.813-7.168-15.981-16.017-15.981z"/>
+	<path class="lexicon-icon-outline grid-square-1" d="M112.028 0.018h-95.993c-8.85 0-16.017 7.168-16.017 16.017v95.993c0 8.814 7.168 15.981 16.017 15.981h95.993c8.85 0 15.981-7.168 15.981-16.017v-95.956c0-8.85-7.168-16.017-15.981-16.017z"/>
+	<path class="lexicon-icon-outline grid-square-2" d="M303.978 0.018h-95.993c-8.85 0-16.017 7.168-16.017 16.017v95.993c0 8.85 7.167 16.017 16.017 16.017h95.993c8.849 0 16.017-7.168 16.017-16.017v-95.993c0-8.85-7.168-16.017-16.017-16.017z"/>
+</symbol><symbol id="user" viewBox="0 0 512 512">
+	<circle class="lexicon-icon-outline user-head" cx="256" cy="126.1" r="96"/>
+	<path class="lexicon-icon-outline user-body" d="M448,398.1c0,112-384,112-384,0C64,200.1,448,202.1,448,398.1z"/>
+</symbol><symbol id="product-menu-closed" viewBox="0 0 512 512">
+	<path class="lexicon-icon-body" fill="none" d="M464,512H144c-26.5,0-48-21.5-48-48v-416c0-26.4,21.5-48,48-48h320c26.5,0,48,21.5,48,48v416C512,490.4,490.4,512,464,512L464,512z"/>
+	<path class="lexicon-icon-outline lx-product-menu-closed-right" d="M464,512H144c-26.5,0-48-21.5-48-48v-416c0-26.4,21.5-48,48-48h320c26.5,0,48,21.5,48,48v416C512,490.4,490.4,512,464,512L464,512z M160,448h288V64H160V448z"/>
+	<path class="lexicon-icon-outline lx-product-menu-closed-left" d="M31,0C13.9,0,0,13.9,0,31V481c0,17.1,13.9,31,31,31s31-13.9,31-31V31C62.1,13.9,48.2,0,31,0C31,0,31,0,31,0z"/>
+</symbol><symbol id="view" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M499.7,228.2C412.4,101.9,291,96,260.4,96c-3.1,0-10.7,0-14.8,0C210,96,81.3,106.5,3.2,244.5c-9.1,16.1,3.3,30.7,9.2,39.3C99.8,410.1,222.6,416,253.6,416c3.2,0,10.8,0,14.9,0c35.2,0,162.2-10.5,240.2-148.5C517.8,251.4,505.7,236.8,499.7,228.2z M253.1,313.5c-28.2,0-51-22.8-51-51c0-28.2,22.8-51,51-51c28.2,0,51,22.8,51,51C304.1,290.7,281.3,313.5,253.1,313.5z M56,256.6c26.8-42.1,62-72.7,104.9-91c6.6-2.8,13.1-5.2,19.4-7.3c-32.8,23-54.3,61.1-54.3,104.2c0,29.7,10.2,57,27.3,78.7C120.7,325.4,86,299.3,56,256.6z M346,349.3c21.2-22.7,34.3-53.2,34.3-86.8c0-44.2-22.6-83.2-56.9-106c40.9,12.1,91.1,39.2,133,98.9C423.3,307.6,382.1,335,346,349.3z"/>
+</symbol><symbol id="share" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M326.2,323.3l-107.6-53.8c2.7-5.9,2.4-19.9,0-27.1l107.6-53.8c77.2,69.3,185.8,13,185.8-78.9C512,49.2,462.8,0,402.3,0S287,51.3,293.4,123.3l-107.6,53.8C113.3,108,0,161.7,0,256c0,100.3,118.3,143.7,185.8,78.9l107.6,53.8C285,460.7,341.8,512,402.3,512S512,462.8,512,402.3C512,314.3,406.3,252,326.2,323.3z M438.9,109.7c0,49-73.1,47.6-73.1,0C365.7,60.3,438.9,62,438.9,109.7z M73.1,256c0-49,73.1-49,73.1,0C146.3,303.3,73.1,305,73.1,256z M365.7,402.3c0-48.6,73.1-49,73.1,0C438.9,451,365.7,449.7,365.7,402.3z"/>
+</symbol><symbol id="question-circle-full" viewBox="0 0 512 512">
+	<path class="lexicon-icon-outline" d="M256 0c-141.37 0-256 114.6-256 256 0 141.37 114.629 256 256 256s256-114.63 256-256c0-141.4-114.63-256-256-256zM269.605 360.769c-4.974 4.827-10.913 7.226-17.876 7.226s-12.873-2.428-17.73-7.226c-4.857-4.827-7.285-10.708-7.285-17.613 0-6.933 2.428-12.844 7.285-17.788 4.857-4.915 10.767-7.402 17.73-7.402s12.932 2.457 17.876 7.402c4.945 4.945 7.431 10.854 7.431 17.788 0 6.905-2.457 12.786-7.431 17.613zM321.038 232.506c-5.705 8.923-13.283 16.735-22.791 23.464l-12.99 9.128c-5.5 3.979-9.714 8.455-12.668 13.37-2.955 4.945-4.447 10.649-4.447 17.145v1.901h-34.202c-0.439-2.106-0.731-4.184-0.936-6.291s-0.321-4.301-0.321-6.612c0-8.397 1.901-16.413 5.705-24.079s10.24-14.834 19.309-21.563l15.185-11.322c9.070-6.7 13.605-15.009 13.605-24.869 0-3.57-0.644-7.080-1.901-10.533s-3.219-6.495-5.851-9.128c-2.633-2.633-5.969-4.71-9.977-6.291s-8.66-2.369-13.927-2.369c-5.705 0-10.561 1.054-14.571 3.16s-7.343 4.769-9.977 8.017c-2.633 3.247-4.594 7.022-5.851 11.322s-1.901 8.66-1.901 13.049c0 4.213 0.41 7.548 1.258 10.065l-39.877-1.58c-0.644-2.311-1.054-4.652-1.258-7.080-0.205-2.399-0.321-4.769-0.321-7.080 0-8.397 1.58-16.619 4.74-24.693s7.812-15.214 13.927-21.416c6.114-6.173 13.663-11.176 22.645-14.951s19.368-5.676 31.188-5.676c12.229 0 22.996 1.785 32.3 5.355 9.274 3.57 17.087 8.25 23.435 14.014 6.319 5.764 11.089 12.434 14.248 19.982s4.74 15.331 4.74 23.289c0.058 12.581-2.809 23.347-8.514 32.27z"/>
+</symbol></svg>
+
+<div class="proto-bar">
+	<span class="proto-tag">PROTOTYPE</span>
+	<span>LPD-104518 Remote Import</span>
+	<span class="remote-banner" hidden id="remoteBanner"></span>
+	<span class="source-controls">Scope:</span>
+	<div class="btn-group source-controls" role="group">
+		<button class="btn btn-secondary btn-sm" data-scope="company" type="button">Company</button>
+		<button class="btn btn-secondary btn-sm" data-scope="site" type="button">Site (Corporate Site)</button>
+	</div>
+	<span class="source-controls">View:</span>
+	<div class="btn-group source-controls" role="group">
+		<button class="btn btn-secondary btn-sm" data-nav="exports" type="button">Export Processes</button>
+		<button class="btn btn-secondary btn-sm" data-nav="environments" type="button">Remote Environments</button>
+	</div>
+	<span class="spacer"></span>
+	<button class="btn btn-secondary btn-sm source-controls" id="notesToggle" type="button">Agreements &amp; Open Questions</button>
+</div>
+
+<header class="top-bar">
+	<button aria-label="Toggle Product Menu" class="btn btn-monospaced btn-unstyled" type="button"><svg class="lexicon-icon"><use href="#product-menu-closed"></use></svg></button>
+	<button aria-label="Back" class="btn btn-monospaced btn-unstyled" hidden id="backButton" type="button"><svg class="lexicon-icon"><use href="#angle-left"></use></svg></button>
+	<h1 id="pageTitle">Export</h1>
+	<span class="spacer"></span>
+	<button aria-label="Applications Menu" class="btn btn-monospaced btn-unstyled" type="button"><svg class="lexicon-icon"><use href="#grid"></use></svg></button>
+	<div class="avatar-wrap">
+		<button aria-label="User Menu and Notifications" class="avatar-button" id="avatarButton" type="button"><svg class="lexicon-icon"><use href="#user"></use></svg></button>
+		<span class="badge badge-danger" hidden id="notifBadge">0</span>
+		<div class="dropdown-menu notif-panel" id="notifPanel">
+			<div class="dropdown-header px-3 py-2">Notifications</div>
+			<div id="notifList"></div>
+		</div>
+	</div>
+</header>
+
+<!-- View: Export Processes -->
+<div data-view="exports">
+	<div class="fds-toolbar">
+		<div class="custom-checkbox custom-control"><label><input class="custom-control-input" type="checkbox"><span class="custom-control-label"></span></label></div>
+		<button class="btn btn-unstyled" type="button"><svg class="lexicon-icon"><use href="#filter"></use></svg>Filter<svg class="lexicon-icon"><use href="#caret-bottom"></use></svg></button>
+		<button class="btn btn-unstyled" type="button"><svg class="lexicon-icon"><use href="#order-arrow-down"></use></svg>Order<svg class="lexicon-icon"><use href="#caret-bottom"></use></svg></button>
+		<div class="input-group search">
+			<div class="input-group-item">
+				<input class="form-control input-group-inset input-group-inset-after" placeholder="Search" type="text">
+				<span class="input-group-inset-item input-group-inset-item-after"><button class="btn btn-unstyled" type="button"><svg class="lexicon-icon"><use href="#search"></use></svg></button></span>
+			</div>
+		</div>
+		<button aria-label="Select View" class="btn btn-unstyled" type="button"><svg class="lexicon-icon"><use href="#list"></use></svg><svg class="lexicon-icon"><use href="#caret-double"></use></svg></button>
+		<button class="btn btn-primary" id="newExportButton" type="button">New</button>
+	</div>
+	<div class="fds-body">
+		<div class="fds-table">
+			<table class="table table-autofit table-hover table-list table-striped">
+				<thead>
+					<tr>
+						<th style="width: 48px;"></th>
+						<th class="table-cell-expand">Title</th>
+						<th>Creation Date</th>
+						<th>Completion Date</th>
+						<th>Author</th>
+						<th>Status</th>
+						<th style="width: 48px;"></th>
+					</tr>
+				</thead>
+				<tbody id="exportRows"></tbody>
+			</table>
+		</div>
+		<div class="pagination-bar" id="exportPagination"></div>
+	</div>
+</div>
+
+<!-- View: New Export -->
+<div data-view="newExport" hidden>
+	<div class="details">
+		<div class="sheet">
+			<h2 class="sheet-title">Export Details</h2>
+			<p class="text-secondary">Provide a descriptive name for your file.</p>
+			<div class="form-group mb-0" id="newExportNameGroup">
+				<label for="newExportName">Name <span class="reference-mark text-warning">*</span></label>
+				<input class="form-control" id="newExportName" placeholder="Add an Export Name" type="text">
+				<div class="form-feedback-group" hidden><div class="form-feedback-item">This field is required.</div></div>
+			</div>
+		</div>
+		<div class="sheet">
+			<div class="d-flex align-items-center justify-content-between">
+				<h2 class="sheet-title">Data Selection</h2>
+				<span class="label label-secondary"><span class="label-item label-item-expand" id="newExportCount"></span></span>
+			</div>
+			<p class="text-secondary">Select and filter the data you want to include in your export.</p>
+			<div class="section-title">Content</div>
+			<div id="newExportContent"></div>
+			<div class="section-title">Options</div>
+			<div class="custom-checkbox custom-control mb-2"><label><input checked class="custom-control-input" id="newExportPermissions" type="checkbox"><span class="custom-control-label">Export Permissions</span></label></div>
+			<div class="custom-checkbox custom-control"><label><input class="custom-control-input" id="newExportDeletions" type="checkbox"><span class="custom-control-label">Export Individual Deletions</span></label></div>
+		</div>
+		<div class="d-flex justify-content-end">
+			<button class="btn btn-secondary mr-2" id="newExportCancel" type="button">Cancel</button>
+			<button class="btn btn-primary" id="newExportSubmit" type="button">Export</button>
+		</div>
+	</div>
+</div>
+
+<!-- View: Export Details -->
+<div data-view="exportDetails" hidden>
+	<div class="details" id="exportDetails"></div>
+</div>
+
+<!-- View: Import Processes in the remote environment (opened in a new tab) -->
+<div data-view="remoteImports" hidden>
+	<div class="fds-toolbar">
+		<div class="custom-checkbox custom-control"><label><input class="custom-control-input" type="checkbox"><span class="custom-control-label"></span></label></div>
+		<button class="btn btn-unstyled" type="button"><svg class="lexicon-icon"><use href="#filter"></use></svg>Filter<svg class="lexicon-icon"><use href="#caret-bottom"></use></svg></button>
+		<button class="btn btn-unstyled" type="button"><svg class="lexicon-icon"><use href="#order-arrow-down"></use></svg>Order<svg class="lexicon-icon"><use href="#caret-bottom"></use></svg></button>
+		<div class="input-group search">
+			<div class="input-group-item">
+				<input class="form-control input-group-inset input-group-inset-after" placeholder="Search" type="text">
+				<span class="input-group-inset-item input-group-inset-item-after"><button class="btn btn-unstyled" type="button"><svg class="lexicon-icon"><use href="#search"></use></svg></button></span>
+			</div>
+		</div>
+		<button aria-label="Select View" class="btn btn-unstyled" type="button"><svg class="lexicon-icon"><use href="#list"></use></svg><svg class="lexicon-icon"><use href="#caret-double"></use></svg></button>
+		<button class="btn btn-primary" data-noop-new type="button">New</button>
+	</div>
+	<div class="fds-body">
+		<div class="fds-table">
+			<table class="table table-autofit table-hover table-list table-striped">
+				<thead>
+					<tr>
+						<th style="width: 48px;"></th>
+						<th class="table-cell-expand">Title</th>
+						<th>Creation Date</th>
+						<th>Completion Date</th>
+						<th>Author</th>
+						<th>Status</th>
+						<th style="width: 48px;"></th>
+					</tr>
+				</thead>
+				<tbody id="remoteImportRows"></tbody>
+			</table>
+		</div>
+		<div class="pagination-bar" id="remotePagination"></div>
+	</div>
+</div>
+
+<!-- View: Remote Environments Configuration (Instance Settings) -->
+<div data-view="environments" hidden>
+	<div class="settings">
+		<ol class="breadcrumb">
+			<li class="breadcrumb-item"><a class="breadcrumb-link" href="#" data-noop>Instance Settings</a></li>
+			<li class="breadcrumb-item active"><span class="breadcrumb-text-truncate">Remote Environments</span></li>
+		</ol>
+		<div class="settings-layout">
+			<nav class="settings-nav"><a href="#" data-goto-envs>Remote Environments</a></nav>
+			<div class="sheet">
+				<h2 class="sheet-title">Remote Environments Configuration</h2>
+				<p class="text-secondary">Enter a remote environment's connection details to enable direct export to it.</p>
+				<div class="section-title d-flex align-items-center justify-content-between">
+					<span>Environments</span>
+					<button class="btn btn-secondary btn-add" id="addEnvButton" type="button">Add</button>
+				</div>
+				<div id="envList"></div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- View: Add / Edit Remote Environment -->
+<div data-view="envForm" hidden>
+	<div class="settings">
+		<ol class="breadcrumb">
+			<li class="breadcrumb-item"><a class="breadcrumb-link" href="#" data-noop>Instance Settings</a></li>
+			<li class="breadcrumb-item"><a class="breadcrumb-link" href="#" data-goto-envs>Remote Environments</a></li>
+			<li class="breadcrumb-item active"><span class="breadcrumb-text-truncate" id="envFormCrumb">Add Remote Environment</span></li>
+		</ol>
+		<div class="settings-layout">
+			<nav class="settings-nav"><a href="#" data-goto-envs>Remote Environments</a></nav>
+			<div class="sheet">
+				<h2 class="sheet-title" id="envFormTitle">Add Remote Environment</h2>
+				<p class="text-secondary">Configure a remote environment's connection to use as an export destination.</p>
+
+
+				<div class="section-title">Environment</div>
+				<div class="form-group" id="fNameGroup">
+					<label for="fName">Environment Name <span class="reference-mark text-warning">*</span>
+						<span class="text-secondary" title="The name users see when choosing where to send an export."><svg class="lexicon-icon"><use href="#question-circle-full"></use></svg></span>
+					</label>
+					<input class="form-control" id="fName" type="text">
+					<div class="form-feedback-group" hidden><div class="form-feedback-item">This field is required.</div></div>
+				</div>
+				<div class="row">
+					<div class="col-md-6 form-group" id="fHostGroup">
+						<label for="fHost">Remote Host/IP <span class="reference-mark text-warning">*</span></label>
+						<input class="form-control" id="fHost" type="text">
+						<div class="form-feedback-group" hidden><div class="form-feedback-item">This field is required.</div></div>
+					</div>
+					<div class="col-md-6 form-group" id="fPortGroup">
+						<label for="fPort">Remote Port <span class="reference-mark text-warning">*</span></label>
+						<input class="form-control" id="fPort" type="text">
+						<div class="form-feedback-group" hidden><div class="form-feedback-item">This field is required.</div></div>
+					</div>
+				</div>
+				<div class="form-group">
+					<label for="fPath">Remote Path Context</label>
+					<input class="form-control" id="fPath" type="text">
+				</div>
+				<div class="custom-checkbox custom-control">
+					<label><input class="custom-control-input" id="fSecure" type="checkbox"><span class="custom-control-label">Use a Secure Network Connection</span></label>
+				</div>
+
+				<div class="section-title mt-5 mb-2">Sites</div>
+				<p class="text-secondary small">Define one or more sites on this remote environment. An environment without sites is also valid.</p>
+				<div id="siteRows"></div>
+				<button class="btn btn-unstyled text-secondary font-weight-semi-bold my-2" id="addSiteButton" type="button"><svg class="lexicon-icon mr-2"><use href="#plus"></use></svg>Add Another Site</button>
+
+				<div class="mt-4">
+					<button class="btn btn-primary mr-2" id="saveEnvButton" type="button">Save</button>
+					<button class="btn btn-secondary" id="cancelEnvButton" type="button">Cancel</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Send to Environment(s) / Site(s) modal -->
+<div class="modal-backdrop fade show" hidden id="modalBackdrop"></div>
+<div class="modal fade show" id="sendModal" role="dialog" tabindex="-1">
+	<div class="modal-dialog modal-dialog-centered">
+		<div class="modal-content">
+			<div class="modal-header">
+				<div class="modal-title" id="sendModalTitle">Send to Site(s)</div>
+				<button aria-label="Close" class="close" data-close-modal type="button"><svg class="lexicon-icon"><use href="#times"></use></svg></button>
+			</div>
+			<div class="modal-body">
+				<div class="form-group" id="importNameGroup">
+					<label for="importName">Name <span class="reference-mark text-warning">*</span></label>
+					<input class="form-control" id="importName" placeholder="Add an import name" type="text">
+					<div class="form-feedback-group" hidden id="importNameError"><div class="form-feedback-item">This field is required.</div></div>
+				</div>
+				<div class="form-group mb-0">
+					<label>Environments</label>
+					<div id="envSelect"></div>
+				</div>
+				<div hidden id="siteSection">
+					<div class="section-title">Site(s) for Selected Environment(s)</div>
+					<div id="siteSelects"></div>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<div class="modal-item-last">
+					<button class="btn btn-secondary mr-2" data-close-modal type="button">Cancel</button>
+					<button class="btn btn-primary" disabled id="sendButton" type="button">Send</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Shared row actions dropdown -->
+<div class="dropdown-menu dropdown-menu-indicator-start" id="rowMenu" style="position: fixed;"></div>
+
+<div class="toast-stack" id="toastStack"></div>
+
+<aside class="notes-drawer" hidden id="notesDrawer">
+	<div class="d-flex justify-content-between align-items-center">
+		<h2 class="h4 m-0">Remote Import Notes</h2>
+		<button aria-label="Close" class="btn btn-monospaced btn-unstyled" id="notesClose" type="button"><svg class="lexicon-icon"><use href="#times"></use></svg></button>
+	</div>
+	<h3>Agreements (LPD-104518)</h3>
+	<ul>
+		<li>Export and Remote Import are separate processes, executed in two separate steps. No changes to the export process.</li>
+		<li>New kebab option on a <strong>Successful</strong> export: <strong>Send to Environment(s)</strong>. It can be executed as many times as the user wants.</li>
+		<li>The user names the remote import (required). That name is what every target environment shows in its import processes list.</li>
+		<li>Company scope: any environment can be selected, with or without sites. No site selection.</li>
+		<li>Site scope: only environments with sites; one or more sites per environment.</li>
+		<li>One toast on start, regardless of how many destinations were selected.</li>
+		<li>Each remote environment reports back its result; one notification per result, with the environment name.</li>
+		<li>Import details live in the remote environment; the toast and the notifications link there.</li>
+		<li>Remote environments are configured in Instance Settings. Port is required. Sites are optional; empty site rows are ignored and partially filled ones block Save.</li>
+	</ul>
+	<h3>Open Questions</h3>
+	<ul>
+		<li>Final action name: "Send to Environment(s)" or "Propagate"? (The prototype uses "Send to Environment(s)".)</li>
+		<li>Company-scope modal title: the prototype uses "Send to Environment(s)".</li>
+		<li>Is the Name prefilled with the export name? (The prototype starts it empty.)</li>
+		<li>View Details: the prototype opens a details page (general info, export configuration, content counts). The "Remote Imports" history section is a proposal, not in the design.</li>
+		<li>With several destinations, "View in destination(s)" expands a list of links in the toast. Is that the intended behavior?</li>
+		<li>Do multiple remote imports run in parallel? (The prototype simulates parallel runs.)</li>
+		<li>Can the environment selector be reused for remote staging or per-asset remote import?</li>
+	</ul>
+</aside>
+
+<script>
+const icon = (id, cls) => '<svg class="lexicon-icon ' + (cls || '') + '"><use href="#' + id + '"></use></svg>';
+
+function escapeHTML(value) {
+	return String(value).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatDate(date) {
+	const hours = date.getHours() % 12 || 12;
+	const minutes = String(date.getMinutes()).padStart(2, '0');
+	const period = date.getHours() < 12 ? 'AM' : 'PM';
+
+	return MONTHS[date.getMonth()] + ' ' + date.getDate() + ', ' + date.getFullYear() + ', ' + hours + ':' + minutes + ' ' + period;
+}
+
+const STATUS = {
+	completedWithErrors: {display: 'warning', label: 'Completed with Errors'},
+	failed: {display: 'danger', label: 'Failed'},
+	inProgress: {display: 'info', label: 'In Progress'},
+	successful: {display: 'success', label: 'Successful'},
+};
+
+function statusLabel(key) {
+	return '<span class="label label-' + STATUS[key].display + '"><span class="label-item label-item-expand">' + STATUS[key].label + '</span></span>';
+}
+
+function authorCell(name) {
+	return '<span class="author"><span class="sticker sticker-circle sticker-sm">' + icon('user') + '</span>' + escapeHTML(name) + '</span>';
+}
+
+function paginationBar(count) {
+	return '<div class="d-flex align-items-center justify-content-between w-100">' +
+		'<div class="d-flex align-items-center">' +
+		'<button class="btn btn-unstyled font-weight-semi-bold text-secondary mr-4" type="button">20 Items ' + icon('caret-bottom') + '</button>' +
+		'<span class="text-secondary">Showing 1 to ' + count + ' of ' + count + ' entries.</span></div>' +
+		'<ul class="pagination mb-0">' +
+		'<li class="page-item disabled"><a class="page-link" href="#" data-noop>' + icon('angle-left') + '</a></li>' +
+		'<li class="page-item active"><a class="page-link" href="#" data-noop>1</a></li>' +
+		'<li class="page-item disabled"><a class="page-link" href="#" data-noop>' + icon('angle-right') + '</a></li>' +
+		'</ul></div>';
+}
+
+/* Seed data (from the Figma screenshots) */
+
+const ENVIRONMENTS = [
+	{host: 'uat.acme.com', id: 1, name: 'UAT', path: '/', port: '8080', secure: false, status: 'connected', sites: [
+		{manualURL: false, name: 'Corporate Site', siteId: '20121', url: ''},
+		{manualURL: false, name: 'Global', siteId: '20100', url: ''},
+		{manualURL: false, name: 'HQ Workspace', siteId: '20187', url: ''},
+	]},
+	{host: 'prod.acme.com', id: 2, name: 'Production', path: '/', port: '443', secure: true, status: 'connected', sites: [
+		{manualURL: false, name: 'Corporate Site', siteId: '30121', url: ''},
+	]},
+	{host: 'dev.acme.internal', id: 3, name: 'Dev', path: '/', port: '8080', secure: false, status: 'connected', sites: []},
+];
+
+/* Demo outcomes: Dev is the broken environment, UAT completes with errors */
+const IMPORT_RESULT_BY_ENV = {Dev: 'failed', UAT: 'completedWithErrors'};
+const FAILING_CONNECTION_ENVS = ['Dev'];
+
+let nextEnvId = 4;
+
+const EXPORTS = {
+	company: [
+		{author: 'Mery Sans', completed: new Date(2026, 8, 15, 9, 30), created: new Date(2026, 8, 15, 9, 30), id: 101, name: 'Instance Backup', status: 'successful'},
+		{author: 'Beni', completed: new Date(2026, 7, 15, 9, 30), created: new Date(2026, 7, 15, 9, 30), id: 102, name: 'Global Templates Export', status: 'completedWithErrors'},
+		{author: 'David', completed: null, created: new Date(2026, 8, 28, 9, 30), id: 103, name: 'Roles and Permissions Export', progress: 64, status: 'inProgress'},
+	],
+	site: [
+		{author: 'Mery Sans', completed: new Date(2026, 8, 15, 9, 30), created: new Date(2026, 8, 15, 9, 30), id: 201, name: 'Remote Backup', status: 'successful'},
+		{author: 'Mery Sans', completed: new Date(2026, 7, 15, 9, 30), created: new Date(2026, 7, 15, 9, 30), id: 202, name: 'Extranet Backup', status: 'successful'},
+		{author: 'Beni', completed: new Date(2026, 7, 15, 9, 30), created: new Date(2026, 7, 15, 9, 30), id: 203, name: 'Monthly Invoice Export', status: 'completedWithErrors'},
+		{author: 'David', completed: new Date(2026, 7, 15, 9, 30), created: new Date(2026, 7, 15, 9, 30), error: 'A required structure was not found.', id: 204, name: 'Quarterly Financials Run', status: 'failed'},
+	],
+};
+
+const state = {
+	editingEnvId: null,
+	modal: null,
+	notifications: [],
+	scope: 'site',
+	view: 'exports',
+};
+
+function envURL(env) {
+	const port = env.port ? ':' + env.port : '';
+	const path = env.path && env.path !== '/' ? env.path : '';
+
+	return (env.secure ? 'https' : 'http') + '://' + env.host + port + path;
+}
+
+/* Views */
+
+const TITLES = {environments: 'Remote Environments', envForm: 'Remote Environments', exportDetails: 'Export Details', exports: 'Export', newExport: 'New Export', remoteImports: 'Import'};
+
+function show(view) {
+	state.view = view;
+
+	document.querySelectorAll('[data-view]').forEach((element) => {
+		element.hidden = element.dataset.view !== view;
+	});
+
+	document.getElementById('pageTitle').textContent = view === 'exportDetails' && detailsProcess ? detailsProcess.name : TITLES[view];
+	document.getElementById('backButton').hidden = !['environments', 'envForm', 'exportDetails', 'newExport'].includes(view);
+
+	document.querySelectorAll('[data-nav]').forEach((button) => {
+		const active = button.dataset.nav === view || (view === 'envForm' && button.dataset.nav === 'environments') || ((view === 'exportDetails' || view === 'newExport') && button.dataset.nav === 'exports');
+
+		button.classList.toggle('btn-primary', active);
+		button.classList.toggle('btn-secondary', !active);
+	});
+
+	document.querySelectorAll('[data-scope]').forEach((button) => {
+		const active = button.dataset.scope === state.scope;
+
+		button.classList.toggle('btn-primary', active);
+		button.classList.toggle('btn-secondary', !active);
+	});
+
+	window.scrollTo(0, 0);
+}
+
+function goToEnvironments() {
+	renderEnvList();
+	show('environments');
+}
+
+document.querySelectorAll('[data-scope]').forEach((button) => button.addEventListener('click', () => {
+	state.scope = button.dataset.scope;
+	renderExportRows();
+	show('exports');
+}));
+
+document.querySelectorAll('[data-nav]').forEach((button) => button.addEventListener('click', () => {
+	if (button.dataset.nav === 'environments') {
+		goToEnvironments();
+	}
+	else {
+		renderExportRows();
+		show('exports');
+	}
+}));
+
+document.getElementById('backButton').addEventListener('click', () => {
+	if (state.view === 'envForm') {
+		goToEnvironments();
+	}
+	else {
+		renderExportRows();
+		show('exports');
+	}
+});
+
+document.addEventListener('click', (event) => {
+	if (event.target.closest('[data-noop]')) {
+		event.preventDefault();
+	}
+
+	if (event.target.closest('[data-goto-envs]')) {
+		event.preventDefault();
+		goToEnvironments();
+	}
+});
+
+/* Shared row menu */
+
+const rowMenu = document.getElementById('rowMenu');
+let rowMenuItems = [];
+let rowMenuOwner = null;
+
+function openRowMenu(button, items) {
+	if (rowMenu.classList.contains('show') && rowMenuOwner === button) {
+		closeRowMenu();
+
+		return;
+	}
+
+	rowMenuItems = items;
+	rowMenuOwner = button;
+
+	rowMenu.innerHTML = items.map((item, index) => '<button class="dropdown-item" data-index="' + index + '" type="button">' +
+		'<span class="dropdown-item-indicator-start">' + icon(item.icon) + '</span>' + item.label + '</button>').join('');
+
+	rowMenu.classList.add('show');
+
+	const rect = button.getBoundingClientRect();
+
+	rowMenu.style.top = rect.bottom + 4 + 'px';
+	rowMenu.style.left = Math.max(8, rect.right - rowMenu.offsetWidth) + 'px';
+}
+
+function closeRowMenu() {
+	rowMenu.classList.remove('show');
+	rowMenuOwner = null;
+}
+
+rowMenu.addEventListener('click', (event) => {
+	const item = event.target.closest('[data-index]');
+
+	if (!item) {
+		return;
+	}
+
+	const action = rowMenuItems[Number(item.dataset.index)];
+
+	closeRowMenu();
+	action.run();
+});
+
+document.addEventListener('click', (event) => {
+	if (!event.target.closest('#rowMenu') && !event.target.closest('[data-row-menu]')) {
+		closeRowMenu();
+	}
+
+	if (!event.target.closest('.avatar-wrap')) {
+		document.getElementById('notifPanel').classList.remove('show');
+	}
+
+	document.querySelectorAll('.tag-select').forEach((element) => {
+		if (!element.contains(event.target)) {
+			element.querySelector('.dropdown-menu').classList.remove('show');
+		}
+	});
+});
+
+window.addEventListener('scroll', closeRowMenu);
+
+const placeholder = (label) => () => toast('info', '"' + label + '" is not part of this prototype.');
+
+/* Export Processes list */
+
+function renderExportRows() {
+	const exports = EXPORTS[state.scope];
+
+	document.getElementById('exportRows').innerHTML = exports.map((process) => {
+		const progress = process.status === 'inProgress'
+			? '<div class="progress-group"><div class="progress"><div class="progress-bar" style="width: ' + process.progress + '%;"></div></div><div class="progress-group-addon">' + process.progress + '%</div></div>'
+			: '';
+		const details = process.error ? '<div><button class="btn btn-link btn-sm p-0" data-error="' + process.id + '" type="button">See More Details</button></div>' : '';
+
+		return '<tr>' +
+			'<td><div class="custom-checkbox custom-control"><label><input class="custom-control-input" type="checkbox"><span class="custom-control-label"></span></label></div></td>' +
+			'<td class="table-cell-expand"><a class="table-list-title text-dark" data-details="' + process.id + '" href="#">' + escapeHTML(process.name) + '</a></td>' +
+			'<td class="text-nowrap">' + formatDate(process.created) + '</td>' +
+			'<td class="text-nowrap">' + (process.completed ? formatDate(process.completed) : '-') + '</td>' +
+			'<td class="text-nowrap">' + authorCell(process.author) + '</td>' +
+			'<td class="text-nowrap">' + statusLabel(process.status) + progress + details + '</td>' +
+			'<td><button aria-label="Actions" class="component-action btn btn-monospaced btn-unstyled" data-row-menu="' + process.id + '" type="button">' + icon('ellipsis-v') + '</button></td>' +
+			'</tr>';
+	}).join('');
+
+	document.getElementById('exportPagination').innerHTML = paginationBar(exports.length);
+}
+
+function getExportActions(process) {
+	const actions = [{icon: 'view', label: 'View Details', run: () => openExportDetails(process)}];
+
+	if (process.status === 'inProgress') {
+		actions.push({icon: 'trash', label: 'Delete', run: placeholder('Delete')});
+
+		return actions;
+	}
+
+	if (process.status === 'successful') {
+		actions.push({icon: 'share', label: 'Send to Environment(s)', run: () => openSendModal(process)});
+	}
+
+	actions.push({icon: 'reload', label: 'Relaunch', run: placeholder('Relaunch')});
+
+	if (process.status === 'successful') {
+		actions.push({icon: 'download', label: 'Download', run: placeholder('Download')});
+	}
+
+	actions.push({icon: 'trash', label: 'Clear', run: placeholder('Clear')});
+
+	return actions;
+}
+
+document.getElementById('exportRows').addEventListener('click', (event) => {
+	const detailsLink = event.target.closest('[data-details]');
+
+	if (detailsLink) {
+		event.preventDefault();
+		openExportDetails(EXPORTS[state.scope].find((candidate) => candidate.id === Number(detailsLink.dataset.details)));
+
+		return;
+	}
+
+	const menuButton = event.target.closest('[data-row-menu]');
+
+	if (menuButton) {
+		const process = EXPORTS[state.scope].find((candidate) => candidate.id === Number(menuButton.dataset.rowMenu));
+
+		openRowMenu(menuButton, getExportActions(process));
+
+		return;
+	}
+
+	const errorButton = event.target.closest('[data-error]');
+
+	if (errorButton) {
+		const process = EXPORTS[state.scope].find((candidate) => candidate.id === Number(errorButton.dataset.error));
+
+		toast('danger', process.name + ': ' + process.error);
+	}
+});
+
+/* Export Details */
+
+const EXPORT_CONFIG = {
+	company: {
+		content: [
+			{count: 24, label: 'Web Content Structures and Templates'},
+			{count: 9, label: 'Roles'},
+			{count: 6, label: 'Categories and Vocabularies'},
+			{count: 14, label: 'Object Definitions'},
+		],
+		file: {name: 'instance-backup.lar', size: '8.6 MB'},
+		pages: null,
+	},
+	site: {
+		content: [
+			{count: 128, label: 'Web Content'},
+			{count: 54, label: 'Documents and Media'},
+			{count: 12, label: 'Blogs'},
+			{count: 7, label: 'Forms'},
+			{count: 31, label: 'Categories and Tags'},
+		],
+		file: {name: 'remote-backup.lar', size: '42.3 MB'},
+		pages: {private: 3, public: 18},
+	},
+};
+
+const REMOTE_SENDS = {
+	201: [
+		{completed: new Date(2026, 8, 16, 10, 6), created: new Date(2026, 8, 16, 10, 2), env: ENVIRONMENTS[0], importName: 'Remote backup - UAT check', sentBy: 'Mery Sans', site: 'Corporate Site', status: 'completedWithErrors'},
+		{completed: new Date(2026, 8, 16, 11, 48), created: new Date(2026, 8, 16, 11, 45), env: ENVIRONMENTS[1], importName: 'Remote backup - go live', sentBy: 'Mery Sans', site: 'Corporate Site', status: 'successful'},
+	],
+};
+
+function getRemoteSends(process) {
+	if (!REMOTE_SENDS[process.id]) {
+		REMOTE_SENDS[process.id] = [];
+	}
+
+	return REMOTE_SENDS[process.id];
+}
+
+let detailsProcess = null;
+
+function openExportDetails(process) {
+	detailsProcess = process;
+	renderExportDetails();
+	show('exportDetails');
+}
+
+function refreshExportDetails(process) {
+	if (state.view === 'exportDetails' && detailsProcess === process) {
+		renderExportDetails();
+	}
+}
+
+function yesNo(value) {
+	return value ? 'Yes' : 'No';
+}
+
+function renderExportDetails() {
+	const process = detailsProcess;
+	const config = EXPORT_CONFIG[state.scope];
+	const successful = process.status === 'successful';
+	const scopeText = state.scope === 'site' ? 'Site: Corporate Site' : 'Instance';
+	const fileName = state.scope === 'site' ? process.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.lar' : config.file.name;
+
+	const sendButton = successful
+		? '<button class="btn btn-primary" data-details-send type="button">' + icon('share', 'mr-2') + 'Send to Environment(s)</button>'
+		: '';
+	const downloadButton = successful
+		? '<button class="btn btn-secondary" data-noop-action="Download" type="button">' + icon('download', 'mr-2') + 'Download</button>'
+		: '';
+
+	let banner = '';
+
+	if (process.error) {
+		banner = '<div class="alert alert-danger"><strong class="lead">Error:</strong> ' + escapeHTML(process.error) + '</div>';
+	}
+	else if (process.status === 'completedWithErrors') {
+		banner = '<div class="alert alert-warning"><strong class="lead">Warning:</strong> The export completed, but some items could not be exported. It cannot be sent to other environments until it is relaunched successfully.</div>';
+	}
+	else if (process.status === 'inProgress') {
+		banner = '<div class="alert alert-info"><strong class="lead">Info:</strong> The export is in progress (' + process.progress + '%). The file will be available when it finishes.</div>';
+	}
+
+	const general = '<div class="sheet"><div class="section-title">General</div><dl class="kv">' +
+		'<div><dt>Name</dt><dd>' + escapeHTML(process.name) + '</dd></div>' +
+		'<div><dt>Status</dt><dd>' + statusLabel(process.status) + '</dd></div>' +
+		'<div><dt>Scope</dt><dd>' + scopeText + '</dd></div>' +
+		'<div><dt>Author</dt><dd>' + authorCell(process.author) + '</dd></div>' +
+		'<div><dt>Creation Date</dt><dd>' + formatDate(process.created) + '</dd></div>' +
+		'<div><dt>Completion Date</dt><dd>' + (process.completed ? formatDate(process.completed) : '-') + '</dd></div>' +
+		'<div><dt>File</dt><dd>' + (successful ? escapeHTML(fileName) + ' <span class="text-secondary">(' + config.file.size + ')</span>' : '-') + '</dd></div>' +
+		'</dl></div>';
+
+	const pages = config.pages
+		? '<div><dt>Pages</dt><dd>' + config.pages.public + ' public, ' + config.pages.private + ' private</dd></div>'
+		: '';
+	const content = process.content || config.content;
+	const contentRows = content.map((item) => '<tr><td class="table-cell-expand">' + item.label + '</td><td class="text-right">' + item.count + '</td></tr>').join('');
+	const total = content.reduce((sum, item) => sum + item.count, 0);
+
+	const configuration = '<div class="sheet"><div class="section-title">Export Configuration</div><dl class="kv mb-4">' +
+		'<div><dt>Date Range</dt><dd>All</dd></div>' + pages +
+		'<div><dt>Permissions</dt><dd>' + yesNo(process.permissions !== false) + '</dd></div>' +
+		'<div><dt>Comments and Ratings</dt><dd>' + yesNo(false) + '</dd></div>' +
+		'<div><dt>Deletions</dt><dd>' + yesNo(Boolean(process.deletions)) + '</dd></div>' +
+		(config.pages ? '<div><dt>Theme Settings and Logo</dt><dd>' + yesNo(true) + '</dd></div>' : '') +
+		'</dl>' +
+		'<div class="fds-table"><table class="table table-list content-table"><thead><tr><th class="table-cell-expand">Content</th><th class="text-right">Items</th></tr></thead><tbody>' + contentRows +
+		'<tr><td class="table-cell-expand font-weight-semi-bold">Total</td><td class="text-right font-weight-semi-bold">' + total + '</td></tr></tbody></table></div></div>';
+
+	const sends = getRemoteSends(process);
+	const sendRows = sends.map((send) => {
+		const destination = send.env.name + (send.site ? ' (' + send.site + ')' : '');
+		const href = remoteImportsHref({completed: send.completed || null, created: send.created, env: send.env, exportName: process.name, importName: send.importName, result: send.status, site: send.site});
+
+		return '<tr><td class="table-cell-expand font-weight-semi-bold">' + escapeHTML(send.importName) + '</td>' +
+			'<td class="text-nowrap">' + escapeHTML(destination) + '</td>' +
+			'<td class="text-nowrap">' + authorCell(send.sentBy) + '</td>' +
+			'<td class="text-nowrap">' + formatDate(send.created) + '</td>' +
+			'<td class="text-nowrap">' + statusLabel(send.status) + '</td>' +
+			'<td class="text-nowrap"><a href="' + href + '" target="_blank">View in ' + escapeHTML(send.env.name) + ' ' + icon('shortcut') + '</a></td></tr>';
+	}).join('');
+
+	let remoteBody;
+
+	if (sends.length) {
+		remoteBody = '<div class="fds-table"><table class="table table-list table-striped content-table"><thead><tr><th class="table-cell-expand">Name</th><th>Destination</th><th>Sent By</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody>' + sendRows + '</tbody></table></div>';
+	}
+	else if (successful) {
+		remoteBody = '<p class="text-secondary mb-0">This export has not been sent to any remote environment yet.</p>';
+	}
+	else {
+		remoteBody = '<p class="text-secondary mb-0">Only successful exports can be sent to remote environments.</p>';
+	}
+
+	const remote = '<div class="sheet"><div class="section-title d-flex align-items-center">Remote Imports<span class="proposal">Proposal: not in the design</span></div>' +
+		'<p class="text-secondary small">Every time this export is sent to an environment. The status is reported back by each destination.</p>' + remoteBody + '</div>';
+
+	document.getElementById('exportDetails').innerHTML =
+		'<div class="details-header"><h2>' + escapeHTML(process.name) + '</h2>' + statusLabel(process.status) + '<span class="spacer"></span>' + downloadButton + sendButton + '</div>' +
+		'<p class="text-secondary mb-4">Export process details</p>' + banner + general + configuration + remote;
+
+	document.getElementById('pageTitle').textContent = process.name;
+}
+
+document.getElementById('exportDetails').addEventListener('click', (event) => {
+	if (event.target.closest('[data-details-send]')) {
+		openSendModal(detailsProcess);
+
+		return;
+	}
+
+	const noop = event.target.closest('[data-noop-action]');
+
+	if (noop) {
+		placeholder(noop.dataset.noopAction)();
+	}
+});
+
+/* New Export */
+
+let newExportContent = [];
+let nextExportId = 1000;
+
+function openNewExport() {
+	newExportContent = EXPORT_CONFIG[state.scope].content.map((item) => Object.assign({selected: true}, item));
+
+	document.getElementById('newExportName').value = '';
+	document.getElementById('newExportPermissions').checked = true;
+	document.getElementById('newExportDeletions').checked = false;
+	setFieldError('newExportNameGroup', false);
+
+	renderNewExportContent();
+	show('newExport');
+	document.getElementById('newExportName').focus();
+}
+
+function renderNewExportContent() {
+	document.getElementById('newExportContent').innerHTML = newExportContent.map((item, index) =>
+		'<div class="custom-checkbox custom-control mb-2"><label><input class="custom-control-input" data-content-index="' + index + '" type="checkbox"' + (item.selected ? ' checked' : '') + '>' +
+		'<span class="custom-control-label">' + item.label + ' <span class="text-secondary">(' + item.count + ')</span></span></label></div>').join('');
+
+	const selectedCount = newExportContent.filter((item) => item.selected).reduce((sum, item) => sum + item.count, 0);
+
+	document.getElementById('newExportCount').textContent = selectedCount + ' Items';
+	updateNewExportButton();
+}
+
+function updateNewExportButton() {
+	const hasName = Boolean(document.getElementById('newExportName').value.trim());
+	const hasContent = newExportContent.some((item) => item.selected);
+
+	document.getElementById('newExportSubmit').disabled = !hasName || !hasContent;
+}
+
+document.getElementById('newExportContent').addEventListener('change', (event) => {
+	const index = event.target.dataset.contentIndex;
+
+	if (index !== undefined) {
+		newExportContent[Number(index)].selected = event.target.checked;
+		renderNewExportContent();
+	}
+});
+
+const newExportNameInput = document.getElementById('newExportName');
+
+newExportNameInput.addEventListener('input', () => {
+	if (newExportNameInput.value.trim()) {
+		setFieldError('newExportNameGroup', false);
+	}
+
+	updateNewExportButton();
+});
+
+newExportNameInput.addEventListener('blur', () => setFieldError('newExportNameGroup', !newExportNameInput.value.trim()));
+
+document.getElementById('newExportButton').addEventListener('click', openNewExport);
+
+document.getElementById('newExportCancel').addEventListener('click', () => {
+	renderExportRows();
+	show('exports');
+});
+
+document.getElementById('newExportSubmit').addEventListener('click', () => {
+	const process = {
+		author: 'Mery Sans',
+		completed: null,
+		content: newExportContent.filter((item) => item.selected).map((item) => ({count: item.count, label: item.label})),
+		created: new Date(),
+		deletions: document.getElementById('newExportDeletions').checked,
+		id: nextExportId++,
+		name: newExportNameInput.value.trim(),
+		permissions: document.getElementById('newExportPermissions').checked,
+		progress: 0,
+		status: 'inProgress',
+	};
+	const scope = state.scope;
+
+	EXPORTS[scope].unshift(process);
+
+	renderExportRows();
+	show('exports');
+	toast('success', 'The export "' + process.name + '" has started.');
+
+	const timer = setInterval(() => {
+		process.progress = Math.min(100, process.progress + 15 + Math.round(Math.random() * 15));
+
+		if (process.progress === 100) {
+			clearInterval(timer);
+
+			process.completed = new Date();
+			process.status = 'successful';
+
+			toast('success', 'The export "' + process.name + '" completed successfully. You can now send it to other environments.');
+		}
+
+		if (state.scope === scope && state.view === 'exports') {
+			renderExportRows();
+		}
+
+		refreshExportDetails(process);
+	}, 700);
+});
+
+document.addEventListener('click', (event) => {
+	if (event.target.closest('[data-noop-new]')) {
+		placeholder('New Import')();
+	}
+});
+
+/* Tag multi-select (Clay MultiSelect look) */
+
+function createTagSelect(container, config) {
+	container.innerHTML = '<div class="tag-select">' +
+		'<div class="form-control form-control-tag-group"></div>' +
+		'<button aria-label="Clear All" class="btn btn-monospaced btn-sm btn-unstyled clear-all" type="button">' + icon('times') + '</button>' +
+		'<div class="dropdown-menu"></div></div>';
+
+	const root = container.querySelector('.tag-select');
+	const group = root.querySelector('.form-control-tag-group');
+	const menu = root.querySelector('.dropdown-menu');
+	let query = '';
+
+	function render() {
+		const selected = config.getSelected();
+		const options = config.getOptions();
+		const chips = selected.map((value) => {
+			const option = options.find((candidate) => candidate.value === value);
+
+			return '<span class="chip">' + escapeHTML(option.label) + '<button aria-label="Remove ' + escapeHTML(option.label) + '" data-remove="' + escapeHTML(value) + '" type="button">' + icon('times-small') + '</button></span>';
+		}).join('');
+
+		group.innerHTML = chips + '<input class="form-control-inset" placeholder="' + (selected.length ? '' : escapeHTML(config.placeholder)) + '" type="text" value="' + escapeHTML(query) + '">';
+		root.querySelector('.clear-all').hidden = !selected.length;
+	}
+
+	function renderMenu() {
+		const selected = config.getSelected();
+		const available = config.getOptions().filter((option) => !selected.includes(option.value) && option.label.toLowerCase().includes(query.toLowerCase()));
+
+		menu.innerHTML = available.length
+			? available.map((option) => '<button class="dropdown-item' + (option.disabled ? ' disabled' : '') + '" data-add="' + escapeHTML(option.value) + '" type="button"' + (option.disabled ? ' disabled' : '') + '>' +
+				escapeHTML(option.label) + (option.hint ? '<span class="hint">' + escapeHTML(option.hint) + '</span>' : '') + '</button>').join('')
+			: '<div class="dropdown-item disabled">No results found.</div>';
+
+		menu.classList.add('show');
+	}
+
+	function focusInput() {
+		const input = group.querySelector('input');
+
+		input.focus();
+		input.setSelectionRange(input.value.length, input.value.length);
+	}
+
+	group.addEventListener('click', (event) => {
+		const remove = event.target.closest('[data-remove]');
+
+		if (remove) {
+			config.onChange(config.getSelected().filter((value) => String(value) !== remove.dataset.remove));
+
+			return;
+		}
+
+		focusInput();
+		renderMenu();
+	});
+
+	group.addEventListener('input', (event) => {
+		query = event.target.value;
+		renderMenu();
+	});
+
+	group.addEventListener('keydown', (event) => {
+		if (event.key === 'Backspace' && !event.target.value && config.getSelected().length) {
+			config.onChange(config.getSelected().slice(0, -1));
+		}
+	});
+
+	menu.addEventListener('click', (event) => {
+		const add = event.target.closest('[data-add]');
+
+		if (!add || add.disabled) {
+			return;
+		}
+
+		const option = config.getOptions().find((candidate) => String(candidate.value) === add.dataset.add);
+
+		query = '';
+		config.onChange(config.getSelected().concat(option.value));
+	});
+
+	root.querySelector('.clear-all').addEventListener('click', () => {
+		query = '';
+		config.onChange([]);
+	});
+
+	render();
+
+	return {render};
+}
+
+/* Send to Environment(s) / Site(s) modal */
+
+const sendModal = document.getElementById('sendModal');
+const backdrop = document.getElementById('modalBackdrop');
+const importNameInput = document.getElementById('importName');
+
+function openSendModal(process) {
+	state.modal = {envIds: [], process: process, sites: {}};
+
+	document.getElementById('sendModalTitle').textContent = state.scope === 'site' ? 'Send to Site(s)' : 'Send to Environment(s)';
+
+	importNameInput.value = '';
+	setImportNameError(false);
+
+	renderSendModal();
+
+	sendModal.classList.add('mockup-open');
+	backdrop.hidden = false;
+	importNameInput.focus();
+}
+
+function closeSendModal() {
+	sendModal.classList.remove('mockup-open');
+	backdrop.hidden = true;
+}
+
+document.querySelectorAll('[data-close-modal]').forEach((button) => button.addEventListener('click', closeSendModal));
+
+function setImportNameError(visible) {
+	document.getElementById('importNameGroup').classList.toggle('has-error', visible);
+	document.getElementById('importNameError').hidden = !visible;
+}
+
+importNameInput.addEventListener('input', () => {
+	if (importNameInput.value.trim()) {
+		setImportNameError(false);
+	}
+
+	updateSendButton();
+});
+
+importNameInput.addEventListener('blur', () => setImportNameError(!importNameInput.value.trim()));
+
+function findEnv(id) {
+	return ENVIRONMENTS.find((env) => env.id === id);
+}
+
+function renderSendModal() {
+	const modalState = state.modal;
+
+	createTagSelect(document.getElementById('envSelect'), {
+		getOptions: () => ENVIRONMENTS.map((env) => {
+			const disabled = state.scope === 'site' && !env.sites.length;
+
+			return {disabled: disabled, hint: disabled ? 'No sites' : '', label: env.name, value: env.id};
+		}),
+		getSelected: () => modalState.envIds,
+		onChange: (envIds) => {
+			envIds.forEach((envId) => {
+				if (!modalState.sites[envId]) {
+					const env = findEnv(envId);
+
+					modalState.sites[envId] = env.sites.length === 1 ? [env.sites[0].name] : [];
+				}
+			});
+
+			Object.keys(modalState.sites).forEach((envId) => {
+				if (!envIds.includes(Number(envId))) {
+					delete modalState.sites[envId];
+				}
+			});
+
+			modalState.envIds = envIds;
+
+			renderSendModal();
+		},
+		placeholder: 'Select environments',
+	});
+
+	const siteSection = document.getElementById('siteSection');
+	const siteSelects = document.getElementById('siteSelects');
+
+	siteSection.hidden = state.scope !== 'site' || !modalState.envIds.length;
+	siteSelects.innerHTML = '';
+
+	if (state.scope === 'site') {
+		modalState.envIds.forEach((envId) => {
+			const env = findEnv(envId);
+			const row = document.createElement('div');
+
+			row.className = 'site-select-row';
+			row.innerHTML = '<label>' + escapeHTML(env.name) + '</label><div class="flex-grow-1"><div></div>' +
+				(modalState.sites[envId].length ? '' : '<div class="form-feedback-item text-danger small mt-1">Select at least one site.</div>') + '</div>';
+
+			siteSelects.appendChild(row);
+
+			createTagSelect(row.querySelector('.flex-grow-1 > div'), {
+				getOptions: () => env.sites.map((site) => ({label: site.name, value: site.name})),
+				getSelected: () => modalState.sites[envId],
+				onChange: (sites) => {
+					modalState.sites[envId] = sites;
+					renderSendModal();
+				},
+				placeholder: 'Select sites',
+			});
+		});
+	}
+
+	updateSendButton();
+}
+
+function getTargets() {
+	const modalState = state.modal;
+	const targets = [];
+
+	modalState.envIds.forEach((envId) => {
+		const env = findEnv(envId);
+
+		if (state.scope === 'company') {
+			targets.push({env: env, site: null});
+		}
+		else {
+			modalState.sites[envId].forEach((siteName) => targets.push({env: env, site: siteName}));
+		}
+	});
+
+	return targets;
+}
+
+function updateSendButton() {
+	const modalState = state.modal;
+	const sitesValid = state.scope === 'company' || modalState.envIds.every((envId) => modalState.sites[envId].length);
+
+	document.getElementById('sendButton').disabled = !importNameInput.value.trim() || !modalState.envIds.length || !sitesValid;
+}
+
+document.getElementById('sendButton').addEventListener('click', () => {
+	const importName = importNameInput.value.trim();
+	const process = state.modal.process;
+	const targets = getTargets();
+	const created = new Date();
+
+	closeSendModal();
+
+	const links = targets.map((target) => ({
+		href: remoteImportsHref({created: created, env: target.env, exportName: process.name, importName: importName, result: 'inProgress', site: target.site}),
+		label: target.site ? target.env.name + ' (' + target.site + ')' : target.env.name,
+	}));
+
+	let linkHTML;
+
+	if (links.length === 1) {
+		linkHTML = '<a class="alert-link" href="' + links[0].href + '" target="_blank">View in destination(s)</a>';
+	}
+	else {
+		linkHTML = '<a class="alert-link" data-toggle-destinations href="#">View in destination(s)</a>' +
+			'<ul class="destinations" hidden>' + links.map((link) => '<li><a class="alert-link" href="' + link.href + '" target="_blank">' + escapeHTML(link.label) + ' ' + icon('shortcut') + '</a></li>').join('') + '</ul>';
+	}
+
+	toast('info', 'Remote Import started, go to the destination environment to review its progress. ' + linkHTML, {html: true, persistent: true});
+
+	targets.forEach((target) => {
+		const send = {created: created, env: target.env, importName: importName, sentBy: 'Mery Sans', site: target.site, status: 'inProgress'};
+
+		getRemoteSends(process).unshift(send);
+		simulateRemoteImport(process, importName, target, created, send);
+	});
+
+	refreshExportDetails(process);
+});
+
+document.getElementById('toastStack').addEventListener('click', (event) => {
+	const toggle = event.target.closest('[data-toggle-destinations]');
+
+	if (toggle) {
+		event.preventDefault();
+
+		const list = toggle.closest('.autofit-section').querySelector('.destinations');
+
+		list.hidden = !list.hidden;
+	}
+});
+
+/* Simulated remote execution: each remote environment reports back on its own */
+
+function simulateRemoteImport(process, importName, target, created, send) {
+	setTimeout(() => {
+		const result = IMPORT_RESULT_BY_ENV[target.env.name] || 'successful';
+
+		send.completed = new Date();
+		send.status = result;
+
+		addNotification({
+			created: created,
+			env: target.env,
+			exportName: process.name,
+			importName: importName,
+			result: result,
+			site: target.site,
+		});
+
+		refreshExportDetails(process);
+	}, 3000 + Math.random() * 5000);
+}
+
+/* Notifications (avatar badge) */
+
+function addNotification(notification) {
+	notification.completed = new Date();
+	notification.id = String(Date.now() + Math.random());
+	notification.unread = true;
+
+	state.notifications.unshift(notification);
+
+	renderNotifications();
+}
+
+function timeAgo(date) {
+	const seconds = Math.round((Date.now() - date.getTime()) / 1000);
+
+	return seconds < 60 ? seconds + ' seconds ago' : Math.round(seconds / 60) + ' minutes ago';
+}
+
+function renderNotifications() {
+	const unread = state.notifications.filter((notification) => notification.unread).length;
+	const badge = document.getElementById('notifBadge');
+
+	badge.hidden = unread === 0;
+	badge.textContent = unread;
+
+	const list = document.getElementById('notifList');
+
+	if (!state.notifications.length) {
+		list.innerHTML = '<div class="px-3 py-3 text-secondary small">You do not have any notifications.</div>';
+
+		return;
+	}
+
+	const iconByResult = {completedWithErrors: 'warning-full', failed: 'exclamation-full', successful: 'check-circle-full'};
+	const colorByResult = {completedWithErrors: 'text-warning', failed: 'text-danger', successful: 'text-success'};
+	const verbByResult = {completedWithErrors: 'completed with errors', failed: 'failed', successful: 'completed successfully'};
+
+	list.innerHTML = state.notifications.map((notification) => {
+		const target = notification.site ? notification.env.name + ' (' + notification.site + ')' : notification.env.name;
+
+		return '<div class="notif-item' + (notification.unread ? ' unread' : '') + '" data-notif="' + notification.id + '">' +
+			'<div class="notif-icon ' + colorByResult[notification.result] + '">' + icon(iconByResult[notification.result]) + '</div>' +
+			'<div><div>Remote import <strong>' + escapeHTML(notification.importName) + '</strong> in <strong>' + escapeHTML(target) + '</strong> ' + verbByResult[notification.result] + '.</div>' +
+			'<div class="notif-meta">Export: ' + escapeHTML(notification.exportName) + ' - ' + timeAgo(notification.completed) + '</div>' +
+			'<a class="btn btn-link btn-sm p-0" data-view-remote href="' + remoteImportsHref(notification) + '" target="_blank">View Import Process in ' + escapeHTML(notification.env.name) + ' ' + icon('shortcut') + '</a>' +
+			'</div></div>';
+	}).join('');
+}
+
+document.getElementById('avatarButton').addEventListener('click', () => {
+	renderNotifications();
+	document.getElementById('notifPanel').classList.toggle('show');
+});
+
+document.getElementById('notifList').addEventListener('click', (event) => {
+	const item = event.target.closest('[data-notif]');
+
+	if (!item) {
+		return;
+	}
+
+	state.notifications.find((notification) => notification.id === item.dataset.notif).unread = false;
+
+	/* Re-render after the click so the new-tab navigation of the link is not interrupted */
+	setTimeout(renderNotifications, 0);
+});
+
+/* Remote environment tab: that environment's own Import Processes list */
+
+function remoteImportsHref(data) {
+	const context = {
+		completed: data.completed ? data.completed.toISOString() : null,
+		created: data.created.toISOString(),
+		env: {host: data.env.host, name: data.env.name, path: data.env.path, port: data.env.port, secure: data.env.secure},
+		exportName: data.exportName,
+		importName: data.importName,
+		result: data.result,
+		site: data.site,
+	};
+
+	return location.pathname + '#remote-imports=' + encodeURIComponent(JSON.stringify(context));
+}
+
+function parseRemoteContext() {
+	const prefix = '#remote-imports=';
+
+	if (!location.hash.startsWith(prefix)) {
+		return null;
+	}
+
+	try {
+		return JSON.parse(decodeURIComponent(location.hash.substring(prefix.length)));
+	}
+	catch (error) {
+		return null;
+	}
+}
+
+const REMOTE_ERRORS = {
+	completedWithErrors: '3 of 128 items could not be imported. See the report entries for details.',
+	failed: 'The import failed because a required structure was not found in this environment.',
+};
+
+function renderRemoteImports(context) {
+	document.body.classList.add('remote-mode');
+
+	const banner = document.getElementById('remoteBanner');
+
+	banner.hidden = false;
+	banner.textContent = 'Remote environment tab: ' + context.env.name + (context.site ? ' / ' + context.site : '') + ' (' + envURL(context.env) + ')';
+
+	document.title = 'Import - ' + context.env.name;
+
+	const imports = [
+		{author: 'Mery Sans', completed: context.completed ? new Date(context.completed) : null, created: new Date(context.created), error: REMOTE_ERRORS[context.result], highlight: true, id: 1, name: context.importName, progress: 42, sourceExport: context.exportName, status: context.result},
+		{author: 'Mery Sans', completed: new Date(2026, 7, 15, 9, 32), created: new Date(2026, 7, 15, 9, 30), id: 2, name: 'Extranet Backup', status: 'successful'},
+		{author: 'David', completed: new Date(2026, 6, 15, 9, 31), created: new Date(2026, 6, 15, 9, 30), id: 3, name: 'Quarterly Financials Run', status: 'successful'},
+	];
+
+	document.getElementById('remoteImportRows').innerHTML = imports.map((process) => {
+		const remoteLabel = process.highlight ? ' <span class="label label-info"><span class="label-item label-item-expand">Remote Import</span></span>' : '';
+		const fromExport = process.sourceExport ? '<div class="small text-secondary">From export: ' + escapeHTML(process.sourceExport) + '</div>' : '';
+		const progress = process.status === 'inProgress'
+			? '<div class="progress-group"><div class="progress"><div class="progress-bar" style="width: ' + process.progress + '%;"></div></div><div class="progress-group-addon">' + process.progress + '%</div></div>'
+			: '';
+		const details = process.error ? '<div><button class="btn btn-link btn-sm p-0" data-remote-error="' + process.id + '" type="button">See More Details</button></div>' : '';
+
+		return '<tr' + (process.highlight ? ' class="highlight"' : '') + '>' +
+			'<td><div class="custom-checkbox custom-control"><label><input class="custom-control-input" type="checkbox"><span class="custom-control-label"></span></label></div></td>' +
+			'<td class="table-cell-expand"><span class="table-list-title">' + escapeHTML(process.name) + '</span>' + remoteLabel + fromExport + '</td>' +
+			'<td class="text-nowrap">' + formatDate(process.created) + '</td>' +
+			'<td class="text-nowrap">' + (process.completed ? formatDate(process.completed) : '-') + '</td>' +
+			'<td class="text-nowrap">' + authorCell(process.author) + '</td>' +
+			'<td class="text-nowrap">' + statusLabel(process.status) + progress + details + '</td>' +
+			'<td><button aria-label="Actions" class="component-action btn btn-monospaced btn-unstyled" data-row-menu="' + process.id + '" type="button">' + icon('ellipsis-v') + '</button></td>' +
+			'</tr>';
+	}).join('');
+
+	document.getElementById('remotePagination').innerHTML = paginationBar(imports.length);
+
+	document.getElementById('remoteImportRows').addEventListener('click', (event) => {
+		const errorButton = event.target.closest('[data-remote-error]');
+
+		if (errorButton) {
+			const process = imports.find((candidate) => candidate.id === Number(errorButton.dataset.remoteError));
+
+			toast('danger', process.name + ': ' + process.error);
+
+			return;
+		}
+
+		const menuButton = event.target.closest('[data-row-menu]');
+
+		if (!menuButton) {
+			return;
+		}
+
+		const process = imports.find((candidate) => candidate.id === Number(menuButton.dataset.rowMenu));
+		const actions = [];
+
+		if (process.status === 'completedWithErrors' || process.status === 'failed') {
+			actions.push({icon: 'list-ul', label: 'View Report Entries', run: placeholder('View Report Entries')});
+			actions.push({icon: 'download', label: 'Export Report Entries', run: placeholder('Export Report Entries')});
+		}
+
+		const lastAction = process.status === 'inProgress' ? 'Delete' : 'Clear';
+
+		actions.push({icon: 'trash', label: lastAction, run: placeholder(lastAction)});
+
+		openRowMenu(menuButton, actions);
+	});
+
+	show('remoteImports');
+}
+
+/* Remote Environments Configuration list */
+
+const CONNECTION_LABELS = {
+	connected: '<span class="label label-success"><span class="label-item label-item-expand">Connected</span></span>',
+	failed: '<span class="label label-danger"><span class="label-item label-item-expand">Connection Failed</span></span>',
+	testing: '<span class="label label-secondary"><span class="label-item label-item-expand">Testing...</span></span>',
+};
+
+function renderEnvList() {
+	const container = document.getElementById('envList');
+
+	if (!ENVIRONMENTS.length) {
+		container.innerHTML = '<p class="text-secondary text-center py-4 mb-0">No remote environments yet. Use the Add button to add one.</p>';
+
+		return;
+	}
+
+	container.innerHTML = '<div class="env-list">' + ENVIRONMENTS.map((env) => {
+		const sites = env.sites.length ? '<div class="env-sites">' + env.sites.map((site) => escapeHTML(site.name)).join(', ') + '</div>' : '<div class="mt-1"></div>';
+
+		return '<div class="env-item"><div class="flex-grow-1">' +
+			'<a class="env-name" data-edit-env="' + env.id + '" href="#">' + escapeHTML(env.name) + '</a>' + sites + CONNECTION_LABELS[env.status] +
+			'</div><button aria-label="Actions" class="component-action btn btn-monospaced btn-unstyled" data-row-menu="' + env.id + '" type="button">' + icon('ellipsis-v') + '</button></div>';
+	}).join('') + '</div>';
+}
+
+function testConnection(env) {
+	env.status = 'testing';
+	renderEnvList();
+
+	setTimeout(() => {
+		if (FAILING_CONNECTION_ENVS.includes(env.name)) {
+			env.status = 'failed';
+			toast('danger', 'Could not connect to ' + env.name + ' (' + envURL(env) + '). Check the host, port, and that remote access between the servers is configured.');
+		}
+		else {
+			env.status = 'connected';
+			toast('success', 'The connection to ' + env.name + ' was successful.');
+		}
+
+		renderEnvList();
+	}, 1200);
+}
+
+function deleteEnv(env) {
+	if (confirm('Are you sure you want to delete the remote environment "' + env.name + '"?')) {
+		ENVIRONMENTS.splice(ENVIRONMENTS.indexOf(env), 1);
+		renderEnvList();
+		toast('success', 'The remote environment was deleted.');
+	}
+}
+
+document.getElementById('envList').addEventListener('click', (event) => {
+	const nameLink = event.target.closest('[data-edit-env]');
+
+	if (nameLink) {
+		event.preventDefault();
+		openEnvForm(Number(nameLink.dataset.editEnv));
+
+		return;
+	}
+
+	const menuButton = event.target.closest('[data-row-menu]');
+
+	if (menuButton) {
+		const env = findEnv(Number(menuButton.dataset.rowMenu));
+
+		openRowMenu(menuButton, [
+			{icon: 'reload', label: 'Test Connection', run: () => testConnection(env)},
+			{icon: 'pencil', label: 'Edit', run: () => openEnvForm(env.id)},
+			{icon: 'trash', label: 'Delete', run: () => deleteEnv(env)},
+		]);
+	}
+});
+
+document.getElementById('addEnvButton').addEventListener('click', () => openEnvForm(null));
+
+/* Add / Edit Remote Environment form */
+
+let formSites = [];
+
+const emptySite = () => ({manualURL: false, name: '', siteId: '', url: ''});
+
+function setFieldError(groupId, visible) {
+	const group = document.getElementById(groupId);
+
+	group.classList.toggle('has-error', visible);
+	group.querySelector('.form-feedback-group').hidden = !visible;
+}
+
+function openEnvForm(envId) {
+	state.editingEnvId = envId;
+
+	const env = envId ? findEnv(envId) : {host: '', name: '', path: '', port: '', secure: false, sites: []};
+	const title = envId ? 'Edit Remote Environment' : 'Add Remote Environment';
+
+	document.getElementById('envFormTitle').textContent = title;
+	document.getElementById('envFormCrumb').textContent = title;
+	document.getElementById('fName').value = env.name;
+	document.getElementById('fHost').value = env.host;
+	document.getElementById('fPort').value = env.port;
+	document.getElementById('fPath').value = env.path === '/' ? '' : env.path;
+	document.getElementById('fSecure').checked = env.secure;
+
+	['fNameGroup', 'fHostGroup', 'fPortGroup'].forEach((groupId) => setFieldError(groupId, false));
+
+	formSites = env.sites.length ? env.sites.map((site) => Object.assign({}, site)) : [emptySite()];
+
+	renderSiteRows(false);
+	show('envForm');
+}
+
+function isEmptySite(site) {
+	return !site.name.trim() && !site.siteId.trim() && !(site.manualURL && site.url.trim());
+}
+
+function renderSiteRows(validate) {
+	const multiple = formSites.length > 1;
+
+	document.getElementById('siteRows').innerHTML = formSites.map((site, index) => {
+		const partial = validate && !isEmptySite(site);
+		const nameError = partial && !site.name.trim();
+		const idError = partial && !site.siteId.trim();
+		const error = '<div class="form-feedback-group"><div class="form-feedback-item">This field is required.</div></div>';
+		const urlField = site.manualURL
+			? '<div class="form-group mt-3"' + (formSites.length > 1 ? ' style="margin-right: 48px;"' : '') + '><label>Remote Site URL <span class="text-secondary" title="Specify the protocol if you want to manually define the remote site URL (e.g. http://localhost:8080/group/asset-library-id).">' + icon('question-circle-full') + '</span></label>' +
+				'<input class="form-control" data-site-field="url" data-index="' + index + '" type="text" value="' + escapeHTML(site.url) + '"></div>'
+			: '';
+		const gutter = multiple
+			? '<div class="site-gutter">' + (index > 0 ? '<button aria-label="Remove Site" class="btn btn-monospaced btn-sm btn-unstyled text-secondary" data-remove-site="' + index + '" type="button">' + icon('trash') + '</button>' : '') + '</div>'
+			: '';
+
+		return '<div class="site-row mb-3"><div class="d-flex">' +
+			'<div class="row flex-grow-1">' +
+			'<div class="col-md-6 form-group mb-2' + (nameError ? ' has-error' : '') + '"><label>Remote Site Name</label><input class="form-control" data-site-field="name" data-index="' + index + '" type="text" value="' + escapeHTML(site.name) + '">' + (nameError ? error : '') + '</div>' +
+			'<div class="col-md-6 form-group mb-2' + (idError ? ' has-error' : '') + '"><label>Remote Site ID</label><input class="form-control" data-site-field="siteId" data-index="' + index + '" type="text" value="' + escapeHTML(site.siteId) + '">' + (idError ? error : '') + '</div>' +
+			'</div>' + gutter + '</div>' +
+			'<div class="custom-checkbox custom-control"><label><input class="custom-control-input" data-site-field="manualURL" data-index="' + index + '" type="checkbox"' + (site.manualURL ? ' checked' : '') + '><span class="custom-control-label">Manually Define the Remote Site URL</span></label></div>' +
+			urlField + '</div>';
+	}).join('');
+}
+
+document.getElementById('siteRows').addEventListener('input', (event) => {
+	const field = event.target.dataset.siteField;
+
+	if (!field) {
+		return;
+	}
+
+	const site = formSites[Number(event.target.dataset.index)];
+
+	if (field === 'manualURL') {
+		site.manualURL = event.target.checked;
+		renderSiteRows(false);
+	}
+	else {
+		site[field] = event.target.value;
+	}
+});
+
+document.getElementById('siteRows').addEventListener('click', (event) => {
+	const remove = event.target.closest('[data-remove-site]');
+
+	if (remove) {
+		formSites.splice(Number(remove.dataset.removeSite), 1);
+		renderSiteRows(false);
+	}
+});
+
+document.getElementById('addSiteButton').addEventListener('click', () => {
+	formSites.push(emptySite());
+	renderSiteRows(false);
+});
+
+document.getElementById('cancelEnvButton').addEventListener('click', goToEnvironments);
+
+document.getElementById('saveEnvButton').addEventListener('click', () => {
+	const name = document.getElementById('fName').value.trim();
+	const host = document.getElementById('fHost').value.trim();
+	const port = document.getElementById('fPort').value.trim();
+	const sites = formSites.filter((site) => !isEmptySite(site));
+	const sitesValid = sites.every((site) => site.name.trim() && site.siteId.trim());
+
+	setFieldError('fNameGroup', !name);
+	setFieldError('fHostGroup', !host);
+	setFieldError('fPortGroup', !port);
+	renderSiteRows(true);
+
+	if (!name || !host || !port || !sitesValid) {
+		return;
+	}
+
+	const values = {
+		host: host,
+		name: name,
+		path: document.getElementById('fPath').value.trim() || '/',
+		port: port,
+		secure: document.getElementById('fSecure').checked,
+		sites: sites.map((site) => ({manualURL: site.manualURL, name: site.name.trim(), siteId: site.siteId.trim(), url: site.manualURL ? site.url.trim() : ''})),
+	};
+
+	if (state.editingEnvId) {
+		Object.assign(findEnv(state.editingEnvId), values);
+	}
+	else {
+		ENVIRONMENTS.push(Object.assign({id: nextEnvId++, status: 'connected'}, values));
+	}
+
+	goToEnvironments();
+	toast('success', 'The remote environment "' + name + '" was saved.');
+});
+
+/* Toasts */
+
+function toast(type, message, options) {
+	const settings = options || {};
+	const iconByType = {danger: 'exclamation-full', info: 'info-circle', success: 'check-circle-full'};
+	const titleByType = {danger: 'Error', info: 'Info', success: 'Success'};
+	const element = document.createElement('div');
+
+	element.className = 'alert alert-dismissible alert-' + type;
+	element.innerHTML = '<div class="alert-autofit-row autofit-row"><div class="autofit-col"><div class="autofit-section"><span class="alert-indicator">' + icon(iconByType[type]) + '</span></div></div>' +
+		'<div class="autofit-col autofit-col-expand"><div class="autofit-section"><strong class="lead">' + titleByType[type] + ':</strong> ' + (settings.html ? message : escapeHTML(message)) + '</div></div></div>' +
+		'<button aria-label="Close" class="close" type="button">' + icon('times') + '</button>';
+
+	element.querySelector('.close').addEventListener('click', () => element.remove());
+
+	document.getElementById('toastStack').appendChild(element);
+
+	if (!settings.persistent) {
+		setTimeout(() => element.remove(), 6000);
+	}
+}
+
+/* Notes drawer */
+
+document.getElementById('notesToggle').addEventListener('click', () => {
+	const drawer = document.getElementById('notesDrawer');
+
+	drawer.hidden = !drawer.hidden;
+});
+
+document.getElementById('notesClose').addEventListener('click', () => {
+	document.getElementById('notesDrawer').hidden = true;
+});
+
+/* Boot */
+
+const remoteContext = parseRemoteContext();
+
+if (remoteContext) {
+	renderRemoteImports(remoteContext);
+}
+else {
+	renderExportRows();
+	renderNotifications();
+	show('exports');
+}
+</script>
+</body>
+</html>
