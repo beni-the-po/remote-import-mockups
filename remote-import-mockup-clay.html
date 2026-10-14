@@ -404,6 +404,11 @@
 				<div class="custom-checkbox custom-control">
 					<label><input class="custom-control-input" id="fSecure" type="checkbox"><span class="custom-control-label">Use a Secure Network Connection</span></label>
 				</div>
+				<div class="mt-4">
+					<button class="btn btn-secondary btn-sm" id="testConnectionButton" type="button"></button>
+					<p class="text-secondary small mt-2 mb-0">Check that this environment can reach the remote environment with the values above. Saving is not required.</p>
+					<div aria-live="polite" class="mt-3" id="testConnectionResult"></div>
+				</div>
 
 				<div class="section-title mt-5 mb-2">Sites</div>
 				<p class="text-secondary small">Define one or more sites on this remote environment. An environment without sites is also valid.</p>
@@ -474,6 +479,7 @@
 		<li>Each remote environment reports back its result; one notification per result, with the environment name.</li>
 		<li>Import details live in the remote environment; the toast and the notifications link there.</li>
 		<li>Remote environments are configured in Instance Settings. Port is required. Sites are optional; empty site rows are ignored and partially filled ones block Save.</li>
+		<li>The Add/Edit Remote Environment page has a <strong>Test Connection</strong> button. It tests the values in the form (no need to save), shows a spinner while running, and shows the result inline (success or error with the reason). Changing a connection field clears the result. Saving after a test stores the result as the environment's connection status in the list.</li>
 	</ul>
 	<h3>Open Questions</h3>
 	<ul>
@@ -1646,6 +1652,8 @@ function openEnvForm(envId) {
 
 	['fNameGroup', 'fHostGroup', 'fPortGroup'].forEach((groupId) => setFieldError(groupId, false));
 
+	resetFormConnectionTest();
+
 	formSites = env.sites.length ? env.sites.map((site) => Object.assign({}, site)) : [emptySite()];
 
 	renderSiteRows(false);
@@ -1714,6 +1722,75 @@ document.getElementById('addSiteButton').addEventListener('click', () => {
 	renderSiteRows(false);
 });
 
+/* Test Connection (form) */
+
+let formTest = {status: null, timer: null};
+
+function renderTestConnectionButton(testing) {
+	const button = document.getElementById('testConnectionButton');
+
+	button.disabled = testing;
+	button.innerHTML = testing
+		? '<span class="inline-item inline-item-before"><span aria-hidden="true" class="loading-animation loading-animation-sm"></span></span>Testing Connection...'
+		: '<span class="inline-item inline-item-before">' + icon('reload') + '</span>Test Connection';
+}
+
+function resetFormConnectionTest() {
+	clearTimeout(formTest.timer);
+	formTest = {status: null, timer: null};
+	renderTestConnectionButton(false);
+	document.getElementById('testConnectionResult').innerHTML = '';
+}
+
+function formConnection() {
+	return {
+		host: document.getElementById('fHost').value.trim(),
+		name: document.getElementById('fName').value.trim(),
+		path: document.getElementById('fPath').value.trim() || '/',
+		port: document.getElementById('fPort').value.trim(),
+		secure: document.getElementById('fSecure').checked,
+	};
+}
+
+function connectionAlert(type, iconId, title, message) {
+	return '<div class="alert alert-' + type + ' mb-0" role="alert"><span class="alert-indicator">' + icon(iconId) + '</span> <strong class="lead">' + title + '</strong> ' + message + '</div>';
+}
+
+document.getElementById('testConnectionButton').addEventListener('click', () => {
+	const connection = formConnection();
+
+	setFieldError('fHostGroup', !connection.host);
+	setFieldError('fPortGroup', !connection.port);
+
+	if (!connection.host || !connection.port) {
+		document.getElementById('testConnectionResult').innerHTML = connectionAlert('warning', 'warning-full', 'Warning:', 'Fill in Remote Host/IP and Remote Port before testing the connection.');
+
+		return;
+	}
+
+	const url = envURL(connection);
+	const failing = FAILING_CONNECTION_ENVS.includes(connection.name) || ENVIRONMENTS.some((env) => FAILING_CONNECTION_ENVS.includes(env.name) && env.host === connection.host);
+
+	renderTestConnectionButton(true);
+	document.getElementById('testConnectionResult').innerHTML = '<p class="text-secondary small mb-0">Connecting to ' + escapeHTML(url) + '...</p>';
+
+	formTest.timer = setTimeout(() => {
+		formTest.status = failing ? 'failed' : 'connected';
+		renderTestConnectionButton(false);
+		document.getElementById('testConnectionResult').innerHTML = failing
+			? connectionAlert('danger', 'exclamation-full', 'Error:', 'Could not connect to ' + escapeHTML(url) + '. Check the host, port, and path, and that remote access between both servers is configured. Tested on ' + formatDate(new Date()) + '.')
+			: connectionAlert('success', 'check-circle-full', 'Success:', 'The connection to ' + escapeHTML(url) + ' is working. Tested on ' + formatDate(new Date()) + '.');
+	}, 1800);
+});
+
+['fHost', 'fPort', 'fPath', 'fSecure'].forEach((id) => {
+	document.getElementById(id).addEventListener('input', () => {
+		if (formTest.status || formTest.timer) {
+			resetFormConnectionTest();
+		}
+	});
+});
+
 document.getElementById('cancelEnvButton').addEventListener('click', goToEnvironments);
 
 document.getElementById('saveEnvButton').addEventListener('click', () => {
@@ -1740,6 +1817,12 @@ document.getElementById('saveEnvButton').addEventListener('click', () => {
 		secure: document.getElementById('fSecure').checked,
 		sites: sites.map((site) => ({manualURL: site.manualURL, name: site.name.trim(), siteId: site.siteId.trim(), url: site.manualURL ? site.url.trim() : ''})),
 	};
+
+	if (formTest.status) {
+		values.status = formTest.status;
+	}
+
+	clearTimeout(formTest.timer);
 
 	if (state.editingEnvId) {
 		Object.assign(findEnv(state.editingEnvId), values);
