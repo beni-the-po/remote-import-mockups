@@ -99,7 +99,15 @@
 	.env-item:last-child { border-bottom: 0; }
 	.env-item .env-name { color: #272833; font-weight: 600; text-decoration: underline; }
 	.env-item .env-sites { color: #6b6c7e; margin: 4px 0; }
-	.site-row .site-gutter { align-items: center; display: flex; flex: 0 0 48px; justify-content: center; padding-top: 30px; }
+	.site-picker { border: 1px solid #e7e7ed; border-radius: 4px; }
+	.site-picker-toolbar { align-items: center; border-bottom: 1px solid #e7e7ed; display: flex; gap: 16px; padding: 12px 16px; }
+	.site-picker-toolbar .form-control { max-width: 320px; }
+	.site-picker table { margin-bottom: 0; }
+	.site-picker td, .site-picker th { vertical-align: top; }
+	.site-picker th { white-space: nowrap; }
+	.site-picker .site-check { width: 48px; }
+	.site-picker .site-url { margin-top: 8px; max-width: 480px; }
+	.sites-empty { background: #f7f8f9; border: 1px dashed #cdced9; border-radius: 4px; color: #6b6c7e; padding: 24px; text-align: center; }
 
 	/* Notes drawer */
 	.notes-drawer { background: #fff; border-left: 1px solid #e7e7ed; box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08); height: 100vh; overflow-y: auto; padding: 24px; position: fixed; right: 0; top: 0; width: 440px; z-index: 1500; }
@@ -411,9 +419,9 @@
 				</div>
 
 				<div class="section-title mt-5 mb-2">Sites</div>
-				<p class="text-secondary small">Define one or more sites on this remote environment. An environment without sites is also valid.</p>
-				<div id="siteRows"></div>
-				<button class="btn btn-unstyled text-secondary font-weight-semi-bold my-2" id="addSiteButton" type="button"><svg class="lexicon-icon mr-2"><use href="#plus"></use></svg>Add Another Site</button>
+				<p class="text-secondary small">Once the connection details are ready, load the sites available in the remote environment and select the ones users can send remote imports to. Only the selected sites are shown when starting a remote import. An environment without sites is also valid.</p>
+				<button class="btn btn-secondary btn-sm mb-3" id="loadSitesButton" type="button"></button>
+				<div aria-live="polite" id="siteSelection"></div>
 
 				<div class="mt-4">
 					<button class="btn btn-primary mr-2" id="saveEnvButton" type="button">Save</button>
@@ -478,7 +486,8 @@
 		<li>One toast on start, regardless of how many destinations were selected.</li>
 		<li>Each remote environment reports back its result; one notification per result, with the environment name.</li>
 		<li>Import details live in the remote environment; the toast and the notifications link there.</li>
-		<li>Remote environments are configured in Instance Settings. Port is required. Sites are optional; empty site rows are ignored and partially filled ones block Save.</li>
+		<li>Remote environments are configured in Instance Settings. Port is required. Sites are optional.</li>
+		<li>Sites are not typed in by hand. Once the connection details are filled in, <strong>Load Sites</strong> calls the remote environment and lists its sites (spinner while loading). The admin selects which ones are related to the environment, and only the selected sites are shown when starting a remote import. Editing an environment shows its selected sites; loading again keeps them selected and marks any the remote no longer returns as <strong>Not Found</strong>. Changing a connection value clears the loaded list and keeps only the selected sites.</li>
 		<li>The Add/Edit Remote Environment page has a <strong>Test Connection</strong> button. It tests the values in the form (no need to save), shows a spinner while running, and shows the result inline (success or error with the reason). Changing a connection field clears the result. Saving after a test stores the result as the environment's connection status in the list.</li>
 	</ul>
 	<h3>Open Questions</h3>
@@ -490,6 +499,7 @@
 		<li>With several destinations, "View in destination(s)" expands a list of links in the toast. Is that the intended behavior?</li>
 		<li>Do multiple remote imports run in parallel? (The prototype simulates parallel runs.)</li>
 		<li>Can the environment selector be reused for remote staging or per-asset remote import?</li>
+		<li>Is "Manually Define the Remote Site URL" still needed per site now that sites come from the remote environment? (The prototype keeps it for each selected site.)</li>
 	</ul>
 </aside>
 
@@ -554,6 +564,38 @@ const ENVIRONMENTS = [
 /* Demo outcomes: Dev is the broken environment, UAT completes with errors */
 const IMPORT_RESULT_BY_ENV = {Dev: 'failed', UAT: 'completedWithErrors'};
 const FAILING_CONNECTION_ENVS = ['Dev'];
+
+/* Sites that each remote environment returns when its sites are loaded */
+
+const REMOTE_SITES = {
+	'prod.acme.com': [
+		{name: 'Corporate Site', siteId: '30121'},
+		{name: 'Global', siteId: '30100'},
+		{name: 'Intranet', siteId: '30203'},
+		{name: 'Partner Portal', siteId: '30219'},
+		{name: 'Careers', siteId: '30235'},
+	],
+	'uat.acme.com': [
+		{name: 'Corporate Site', siteId: '20121'},
+		{name: 'Global', siteId: '20100'},
+		{name: 'HQ Workspace', siteId: '20187'},
+		{name: 'Intranet', siteId: '20203'},
+		{name: 'Partner Portal', siteId: '20219'},
+		{name: 'Careers', siteId: '20235'},
+		{name: 'Brand Guidelines', siteId: '20251'},
+	],
+};
+
+const DEFAULT_REMOTE_SITES = [
+	{name: 'Guest', siteId: '40119'},
+	{name: 'Global', siteId: '40100'},
+	{name: 'Corporate Site', siteId: '40121'},
+	{name: 'Intranet', siteId: '40203'},
+];
+
+function isFailingConnection(connection) {
+	return FAILING_CONNECTION_ENVS.includes(connection.name) || ENVIRONMENTS.some((env) => FAILING_CONNECTION_ENVS.includes(env.name) && env.host === connection.host);
+}
 
 let nextEnvId = 4;
 
@@ -1625,9 +1667,7 @@ document.getElementById('addEnvButton').addEventListener('click', () => openEnvF
 
 /* Add / Edit Remote Environment form */
 
-let formSites = [];
-
-const emptySite = () => ({manualURL: false, name: '', siteId: '', url: ''});
+let siteSelection = {error: null, loaded: false, loading: false, query: '', sites: [], timer: null};
 
 function setFieldError(groupId, visible) {
 	const group = document.getElementById(groupId);
@@ -1654,72 +1694,185 @@ function openEnvForm(envId) {
 
 	resetFormConnectionTest();
 
-	formSites = env.sites.length ? env.sites.map((site) => Object.assign({}, site)) : [emptySite()];
+	clearTimeout(siteSelection.timer);
+	siteSelection = {error: null, loaded: false, loading: false, query: '', sites: env.sites.map((site) => Object.assign({selected: true}, site)), timer: null};
 
-	renderSiteRows(false);
+	renderSiteSelection();
 	show('envForm');
 }
 
-function isEmptySite(site) {
-	return !site.name.trim() && !site.siteId.trim() && !(site.manualURL && site.url.trim());
+/* Sites: loaded from the remote environment, then selected */
+
+function renderLoadSitesButton() {
+	const button = document.getElementById('loadSitesButton');
+
+	button.disabled = siteSelection.loading;
+	button.innerHTML = siteSelection.loading
+		? '<span class="inline-item inline-item-before"><span aria-hidden="true" class="loading-animation loading-animation-sm"></span></span>Loading Sites...'
+		: '<span class="inline-item inline-item-before">' + icon('reload') + '</span>' + (siteSelection.loaded ? 'Reload Sites' : 'Load Sites');
 }
 
-function renderSiteRows(validate) {
-	const multiple = formSites.length > 1;
-
-	document.getElementById('siteRows').innerHTML = formSites.map((site, index) => {
-		const partial = validate && !isEmptySite(site);
-		const nameError = partial && !site.name.trim();
-		const idError = partial && !site.siteId.trim();
-		const error = '<div class="form-feedback-group"><div class="form-feedback-item">This field is required.</div></div>';
-		const urlField = site.manualURL
-			? '<div class="form-group mt-3"' + (formSites.length > 1 ? ' style="margin-right: 48px;"' : '') + '><label>Remote Site URL <span class="text-secondary" title="Specify the protocol if you want to manually define the remote site URL (e.g. http://localhost:8080/group/asset-library-id).">' + icon('question-circle-full') + '</span></label>' +
-				'<input class="form-control" data-site-field="url" data-index="' + index + '" type="text" value="' + escapeHTML(site.url) + '"></div>'
-			: '';
-		const gutter = multiple
-			? '<div class="site-gutter">' + (index > 0 ? '<button aria-label="Remove Site" class="btn btn-monospaced btn-sm btn-unstyled text-secondary" data-remove-site="' + index + '" type="button">' + icon('trash') + '</button>' : '') + '</div>'
-			: '';
-
-		return '<div class="site-row mb-3"><div class="d-flex">' +
-			'<div class="row flex-grow-1">' +
-			'<div class="col-md-6 form-group mb-2' + (nameError ? ' has-error' : '') + '"><label>Remote Site Name</label><input class="form-control" data-site-field="name" data-index="' + index + '" type="text" value="' + escapeHTML(site.name) + '">' + (nameError ? error : '') + '</div>' +
-			'<div class="col-md-6 form-group mb-2' + (idError ? ' has-error' : '') + '"><label>Remote Site ID</label><input class="form-control" data-site-field="siteId" data-index="' + index + '" type="text" value="' + escapeHTML(site.siteId) + '">' + (idError ? error : '') + '</div>' +
-			'</div>' + gutter + '</div>' +
-			'<div class="custom-checkbox custom-control"><label><input class="custom-control-input" data-site-field="manualURL" data-index="' + index + '" type="checkbox"' + (site.manualURL ? ' checked' : '') + '><span class="custom-control-label">Manually Define the Remote Site URL</span></label></div>' +
-			urlField + '</div>';
-	}).join('');
+function selectedSiteCount() {
+	return siteSelection.sites.filter((site) => site.selected).length;
 }
 
-document.getElementById('siteRows').addEventListener('input', (event) => {
+function renderSiteSelection() {
+	renderLoadSitesButton();
+
+	const container = document.getElementById('siteSelection');
+
+	if (siteSelection.loading) {
+		container.innerHTML = '<p class="text-secondary small mb-0">Getting the sites from ' + escapeHTML(envURL(formConnection())) + '...</p>';
+
+		return;
+	}
+
+	const error = siteSelection.error ? '<div class="mb-3">' + siteSelection.error + '</div>' : '';
+
+	if (!siteSelection.sites.length) {
+		container.innerHTML = error + '<div class="sites-empty">' + (siteSelection.loaded
+			? 'The remote environment has no sites.'
+			: 'No sites selected. Fill in the connection details and use Load Sites to get the sites available in the remote environment.') + '</div>';
+
+		return;
+	}
+
+	const hint = siteSelection.loaded
+		? ''
+		: '<p class="text-secondary small">These are the sites selected for this environment. Use Load Sites to see every site available in the remote environment and change the selection.</p>';
+	const search = siteSelection.loaded
+		? '<input aria-label="Search sites" class="form-control form-control-sm" data-site-search placeholder="Search" type="text" value="' + escapeHTML(siteSelection.query) + '">'
+		: '';
+
+	container.innerHTML = error + hint + '<div class="site-picker"><div class="site-picker-toolbar">' + search +
+		'<span class="ml-auto small text-secondary" id="siteSelectionCount"></span></div><div id="siteTable"></div></div>';
+
+	renderSiteTable();
+}
+
+function renderSiteTable() {
+	const query = siteSelection.query.trim().toLowerCase();
+	const rows = siteSelection.sites
+		.map((site, index) => ({index: index, site: site}))
+		.filter((row) => !query || row.site.name.toLowerCase().includes(query) || row.site.siteId.includes(query));
+	const allSelected = siteSelection.sites.length && siteSelection.sites.every((site) => site.selected);
+	const checkbox = (attributes, checked) => '<div class="custom-checkbox custom-control"><label><input class="custom-control-input" ' + attributes + ' type="checkbox"' + (checked ? ' checked' : '') + '><span class="custom-control-label"></span></label></div>';
+
+	document.getElementById('siteSelectionCount').textContent = selectedSiteCount() + ' of ' + siteSelection.sites.length + ' selected';
+
+	document.getElementById('siteTable').innerHTML = '<table class="table table-autofit table-list"><thead><tr>' +
+		'<th class="site-check">' + checkbox('aria-label="Select All Sites" data-site-all', allSelected) + '</th>' +
+		'<th class="table-cell-expand">Site Name</th><th>Remote Site ID</th></tr></thead><tbody>' +
+		(rows.length ? rows.map((row) => {
+			const site = row.site;
+			const missing = site.missing ? ' <span class="label label-warning" title="This site was not returned by the remote environment. It may have been deleted or the connection values may point to another environment."><span class="label-item label-item-expand">Not Found</span></span>' : '';
+			const url = site.selected
+				? '<div class="custom-checkbox custom-control mt-2"><label><input class="custom-control-input" data-site-field="manualURL" data-index="' + row.index + '" type="checkbox"' + (site.manualURL ? ' checked' : '') + '><span class="custom-control-label small">Manually Define the Remote Site URL</span></label></div>' +
+					(site.manualURL
+						? '<div class="site-url"><label class="small">Remote Site URL <span class="text-secondary" title="Specify the protocol if you want to manually define the remote site URL (e.g. http://localhost:8080/group/asset-library-id).">' + icon('question-circle-full') + '</span></label>' +
+							'<input class="form-control form-control-sm" data-site-field="url" data-index="' + row.index + '" type="text" value="' + escapeHTML(site.url) + '"></div>'
+						: '')
+				: '';
+
+			return '<tr' + (site.selected ? ' class="table-active"' : '') + '><td class="site-check">' + checkbox('aria-label="Select ' + escapeHTML(site.name) + '" data-site-toggle="' + row.index + '"', site.selected) + '</td>' +
+				'<td class="table-cell-expand"><span class="font-weight-semi-bold">' + escapeHTML(site.name) + '</span>' + missing + url + '</td>' +
+				'<td>' + escapeHTML(site.siteId) + '</td></tr>';
+		}).join('') : '<tr><td class="text-center text-secondary" colspan="3">No sites match your search.</td></tr>') +
+		'</tbody></table>';
+}
+
+document.getElementById('loadSitesButton').addEventListener('click', () => {
+	const connection = formConnection();
+
+	setFieldError('fHostGroup', !connection.host);
+	setFieldError('fPortGroup', !connection.port);
+
+	if (!connection.host || !connection.port) {
+		siteSelection.error = connectionAlert('warning', 'warning-full', 'Warning:', 'Fill in Remote Host/IP and Remote Port before loading the sites.');
+		renderSiteSelection();
+
+		return;
+	}
+
+	siteSelection.error = null;
+	siteSelection.loading = true;
+	renderSiteSelection();
+
+	siteSelection.timer = setTimeout(() => {
+		siteSelection.loading = false;
+		siteSelection.timer = null;
+
+		if (isFailingConnection(connection)) {
+			siteSelection.error = connectionAlert('danger', 'exclamation-full', 'Error:', 'Could not get the sites from ' + escapeHTML(envURL(connection)) + '. Check the connection details and that remote access between both servers is configured.');
+		}
+		else {
+			const catalog = REMOTE_SITES[connection.host] || DEFAULT_REMOTE_SITES;
+			const previous = {};
+
+			siteSelection.sites.filter((site) => site.selected).forEach((site) => {
+				previous[site.siteId] = site;
+			});
+
+			const sites = catalog.map((remote) => {
+				const kept = previous[remote.siteId];
+
+				delete previous[remote.siteId];
+
+				return kept
+					? Object.assign({}, kept, {missing: false, name: remote.name})
+					: {manualURL: false, name: remote.name, selected: false, siteId: remote.siteId, url: ''};
+			});
+
+			Object.keys(previous).forEach((siteId) => sites.push(Object.assign({}, previous[siteId], {missing: true})));
+
+			siteSelection.loaded = true;
+			siteSelection.query = '';
+			siteSelection.sites = sites;
+		}
+
+		renderSiteSelection();
+	}, 1500);
+});
+
+document.getElementById('siteSelection').addEventListener('input', (event) => {
+	if (event.target.matches('[data-site-search]')) {
+		siteSelection.query = event.target.value;
+		renderSiteTable();
+
+		return;
+	}
+
+	if (event.target.matches('[data-site-all]')) {
+		siteSelection.sites.forEach((site) => {
+			site.selected = event.target.checked;
+		});
+		renderSiteTable();
+
+		return;
+	}
+
+	if (event.target.dataset.siteToggle !== undefined) {
+		siteSelection.sites[Number(event.target.dataset.siteToggle)].selected = event.target.checked;
+		renderSiteTable();
+
+		return;
+	}
+
 	const field = event.target.dataset.siteField;
 
 	if (!field) {
 		return;
 	}
 
-	const site = formSites[Number(event.target.dataset.index)];
+	const site = siteSelection.sites[Number(event.target.dataset.index)];
 
 	if (field === 'manualURL') {
 		site.manualURL = event.target.checked;
-		renderSiteRows(false);
+		renderSiteTable();
 	}
 	else {
 		site[field] = event.target.value;
 	}
-});
-
-document.getElementById('siteRows').addEventListener('click', (event) => {
-	const remove = event.target.closest('[data-remove-site]');
-
-	if (remove) {
-		formSites.splice(Number(remove.dataset.removeSite), 1);
-		renderSiteRows(false);
-	}
-});
-
-document.getElementById('addSiteButton').addEventListener('click', () => {
-	formSites.push(emptySite());
-	renderSiteRows(false);
 });
 
 /* Test Connection (form) */
@@ -1769,7 +1922,7 @@ document.getElementById('testConnectionButton').addEventListener('click', () => 
 	}
 
 	const url = envURL(connection);
-	const failing = FAILING_CONNECTION_ENVS.includes(connection.name) || ENVIRONMENTS.some((env) => FAILING_CONNECTION_ENVS.includes(env.name) && env.host === connection.host);
+	const failing = isFailingConnection(connection);
 
 	renderTestConnectionButton(true);
 	document.getElementById('testConnectionResult').innerHTML = '<p class="text-secondary small mb-0">Connecting to ' + escapeHTML(url) + '...</p>';
@@ -1788,6 +1941,12 @@ document.getElementById('testConnectionButton').addEventListener('click', () => 
 		if (formTest.status || formTest.timer) {
 			resetFormConnectionTest();
 		}
+
+		if (siteSelection.loaded || siteSelection.loading || siteSelection.error) {
+			clearTimeout(siteSelection.timer);
+			siteSelection = {error: null, loaded: false, loading: false, query: '', sites: siteSelection.sites.filter((site) => site.selected).map((site) => Object.assign({}, site, {missing: false})), timer: null};
+			renderSiteSelection();
+		}
 	});
 });
 
@@ -1797,17 +1956,17 @@ document.getElementById('saveEnvButton').addEventListener('click', () => {
 	const name = document.getElementById('fName').value.trim();
 	const host = document.getElementById('fHost').value.trim();
 	const port = document.getElementById('fPort').value.trim();
-	const sites = formSites.filter((site) => !isEmptySite(site));
-	const sitesValid = sites.every((site) => site.name.trim() && site.siteId.trim());
+	const sites = siteSelection.sites.filter((site) => site.selected);
 
 	setFieldError('fNameGroup', !name);
 	setFieldError('fHostGroup', !host);
 	setFieldError('fPortGroup', !port);
-	renderSiteRows(true);
 
-	if (!name || !host || !port || !sitesValid) {
+	if (!name || !host || !port) {
 		return;
 	}
+
+	clearTimeout(siteSelection.timer);
 
 	const values = {
 		host: host,
