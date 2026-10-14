@@ -106,7 +106,6 @@
 	.site-picker td, .site-picker th { vertical-align: top; }
 	.site-picker th { white-space: nowrap; }
 	.site-picker .site-check { width: 48px; }
-	.site-picker .site-url { margin-top: 8px; max-width: 480px; }
 	.sites-empty { background: #f7f8f9; border: 1px dashed #cdced9; border-radius: 4px; color: #6b6c7e; padding: 24px; text-align: center; }
 
 	/* Notes drawer */
@@ -499,7 +498,6 @@
 		<li>With several destinations, "View in destination(s)" expands a list of links in the toast. Is that the intended behavior?</li>
 		<li>Do multiple remote imports run in parallel? (The prototype simulates parallel runs.)</li>
 		<li>Can the environment selector be reused for remote staging or per-asset remote import?</li>
-		<li>Is "Manually Define the Remote Site URL" still needed per site now that sites come from the remote environment? (The prototype keeps it for each selected site.)</li>
 	</ul>
 </aside>
 
@@ -551,12 +549,12 @@ function paginationBar(count) {
 
 const ENVIRONMENTS = [
 	{host: 'uat.acme.com', id: 1, name: 'UAT', path: '/', port: '8080', secure: false, status: 'connected', sites: [
-		{manualURL: false, name: 'Corporate Site', siteId: '20121', url: ''},
-		{manualURL: false, name: 'Global', siteId: '20100', url: ''},
-		{manualURL: false, name: 'HQ Workspace', siteId: '20187', url: ''},
+		{name: 'Corporate Site', siteId: '20121'},
+		{name: 'Global', siteId: '20100'},
+		{name: 'HQ Workspace', siteId: '20187'},
 	]},
 	{host: 'prod.acme.com', id: 2, name: 'Production', path: '/', port: '443', secure: true, status: 'connected', sites: [
-		{manualURL: false, name: 'Corporate Site', siteId: '30121', url: ''},
+		{name: 'Corporate Site', siteId: '30121'},
 	]},
 	{host: 'dev.acme.internal', id: 3, name: 'Dev', path: '/', port: '8080', secure: false, status: 'connected', sites: []},
 ];
@@ -1766,16 +1764,8 @@ function renderSiteTable() {
 		(rows.length ? rows.map((row) => {
 			const site = row.site;
 			const missing = site.missing ? ' <span class="label label-warning" title="This site was not returned by the remote environment. It may have been deleted or the connection values may point to another environment."><span class="label-item label-item-expand">Not Found</span></span>' : '';
-			const url = site.selected
-				? '<div class="custom-checkbox custom-control mt-2"><label><input class="custom-control-input" data-site-field="manualURL" data-index="' + row.index + '" type="checkbox"' + (site.manualURL ? ' checked' : '') + '><span class="custom-control-label small">Manually Define the Remote Site URL</span></label></div>' +
-					(site.manualURL
-						? '<div class="site-url"><label class="small">Remote Site URL <span class="text-secondary" title="Specify the protocol if you want to manually define the remote site URL (e.g. http://localhost:8080/group/asset-library-id).">' + icon('question-circle-full') + '</span></label>' +
-							'<input class="form-control form-control-sm" data-site-field="url" data-index="' + row.index + '" type="text" value="' + escapeHTML(site.url) + '"></div>'
-						: '')
-				: '';
-
 			return '<tr' + (site.selected ? ' class="table-active"' : '') + '><td class="site-check">' + checkbox('aria-label="Select ' + escapeHTML(site.name) + '" data-site-toggle="' + row.index + '"', site.selected) + '</td>' +
-				'<td class="table-cell-expand"><span class="font-weight-semi-bold">' + escapeHTML(site.name) + '</span>' + missing + url + '</td>' +
+				'<td class="table-cell-expand"><span class="font-weight-semi-bold">' + escapeHTML(site.name) + '</span>' + missing + '</td>' +
 				'<td>' + escapeHTML(site.siteId) + '</td></tr>';
 		}).join('') : '<tr><td class="text-center text-secondary" colspan="3">No sites match your search.</td></tr>') +
 		'</tbody></table>';
@@ -1820,7 +1810,7 @@ document.getElementById('loadSitesButton').addEventListener('click', () => {
 
 				return kept
 					? Object.assign({}, kept, {missing: false, name: remote.name})
-					: {manualURL: false, name: remote.name, selected: false, siteId: remote.siteId, url: ''};
+					: {name: remote.name, selected: false, siteId: remote.siteId};
 			});
 
 			Object.keys(previous).forEach((siteId) => sites.push(Object.assign({}, previous[siteId], {missing: true})));
@@ -1854,24 +1844,6 @@ document.getElementById('siteSelection').addEventListener('input', (event) => {
 	if (event.target.dataset.siteToggle !== undefined) {
 		siteSelection.sites[Number(event.target.dataset.siteToggle)].selected = event.target.checked;
 		renderSiteTable();
-
-		return;
-	}
-
-	const field = event.target.dataset.siteField;
-
-	if (!field) {
-		return;
-	}
-
-	const site = siteSelection.sites[Number(event.target.dataset.index)];
-
-	if (field === 'manualURL') {
-		site.manualURL = event.target.checked;
-		renderSiteTable();
-	}
-	else {
-		site[field] = event.target.value;
 	}
 });
 
@@ -1974,7 +1946,7 @@ document.getElementById('saveEnvButton').addEventListener('click', () => {
 		path: document.getElementById('fPath').value.trim() || '/',
 		port: port,
 		secure: document.getElementById('fSecure').checked,
-		sites: sites.map((site) => ({manualURL: site.manualURL, name: site.name.trim(), siteId: site.siteId.trim(), url: site.manualURL ? site.url.trim() : ''})),
+		sites: sites.map((site) => ({name: site.name, siteId: site.siteId})),
 	};
 
 	if (formTest.status) {
