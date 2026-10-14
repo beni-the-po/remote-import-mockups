@@ -486,7 +486,7 @@
 		<li>Each remote environment reports back its result; one notification per result, with the environment name.</li>
 		<li>Import details live in the remote environment; the toast and the notifications link there.</li>
 		<li>Remote environments are configured in Instance Settings. Port is required. Sites are optional.</li>
-		<li>Sites are not typed in by hand. Once the connection details are filled in, <strong>Load Sites</strong> calls the remote environment and lists its sites (spinner while loading). The admin selects which ones are related to the environment, and only the selected sites are shown when starting a remote import. Editing an environment shows its selected sites; loading again keeps them selected and marks any the remote no longer returns as <strong>Not Found</strong>. Changing a connection value clears the loaded list and keeps only the selected sites.</li>
+		<li>Sites are not typed in by hand. Once the connection details are filled in, <strong>Load Sites</strong> calls the remote environment and lists its sites (spinner while loading). The admin selects which ones are related to the environment, and only the selected sites are shown when starting a remote import. Editing an environment shows its selected sites and a <strong>Refresh Sites</strong> button that gets the current list from the remote: the selected sites that still exist stay selected (with their current names), new remote sites appear unselected, and selected sites that were deleted in the remote are removed from the list with a warning naming them (applied on Save). Changing a connection value clears the loaded list and keeps only the selected sites.</li>
 		<li>The Add/Edit Remote Environment page has a <strong>Test Connection</strong> button. It tests the values in the form (no need to save), shows a spinner while running, and shows the result inline (success or error with the reason). Changing a connection field clears the result. Saving after a test stores the result as the environment's connection status in the list.</li>
 	</ul>
 	<h3>Open Questions</h3>
@@ -563,7 +563,7 @@ const ENVIRONMENTS = [
 const IMPORT_RESULT_BY_ENV = {Dev: 'failed', UAT: 'completedWithErrors'};
 const FAILING_CONNECTION_ENVS = ['Dev'];
 
-/* Sites that each remote environment returns when its sites are loaded */
+/* Sites that each remote environment returns when its sites are loaded. HQ Workspace (20187) was deleted in UAT, so refreshing UAT's sites removes it. */
 
 const REMOTE_SITES = {
 	'prod.acme.com': [
@@ -576,7 +576,6 @@ const REMOTE_SITES = {
 	'uat.acme.com': [
 		{name: 'Corporate Site', siteId: '20121'},
 		{name: 'Global', siteId: '20100'},
-		{name: 'HQ Workspace', siteId: '20187'},
 		{name: 'Intranet', siteId: '20203'},
 		{name: 'Partner Portal', siteId: '20219'},
 		{name: 'Careers', siteId: '20235'},
@@ -1665,7 +1664,7 @@ document.getElementById('addEnvButton').addEventListener('click', () => openEnvF
 
 /* Add / Edit Remote Environment form */
 
-let siteSelection = {error: null, loaded: false, loading: false, query: '', sites: [], timer: null};
+let siteSelection = {error: null, loaded: false, loading: false, notice: null, query: '', sites: [], timer: null};
 
 function setFieldError(groupId, visible) {
 	const group = document.getElementById(groupId);
@@ -1693,7 +1692,7 @@ function openEnvForm(envId) {
 	resetFormConnectionTest();
 
 	clearTimeout(siteSelection.timer);
-	siteSelection = {error: null, loaded: false, loading: false, query: '', sites: env.sites.map((site) => Object.assign({selected: true}, site)), timer: null};
+	siteSelection = {error: null, loaded: false, loading: false, notice: null, query: '', sites: env.sites.map((site) => Object.assign({selected: true}, site)), timer: null};
 
 	renderSiteSelection();
 	show('envForm');
@@ -1707,7 +1706,7 @@ function renderLoadSitesButton() {
 	button.disabled = siteSelection.loading;
 	button.innerHTML = siteSelection.loading
 		? '<span class="inline-item inline-item-before"><span aria-hidden="true" class="loading-animation loading-animation-sm"></span></span>Loading Sites...'
-		: '<span class="inline-item inline-item-before">' + icon('reload') + '</span>' + (siteSelection.loaded ? 'Reload Sites' : 'Load Sites');
+		: '<span class="inline-item inline-item-before">' + icon('reload') + '</span>' + (siteSelection.loaded || state.editingEnvId ? 'Refresh Sites' : 'Load Sites');
 }
 
 function selectedSiteCount() {
@@ -1725,7 +1724,7 @@ function renderSiteSelection() {
 		return;
 	}
 
-	const error = siteSelection.error ? '<div class="mb-3">' + siteSelection.error + '</div>' : '';
+	const error = [siteSelection.error, siteSelection.notice].filter(Boolean).map((alert) => '<div class="mb-3">' + alert + '</div>').join('');
 
 	if (!siteSelection.sites.length) {
 		container.innerHTML = error + '<div class="sites-empty">' + (siteSelection.loaded
@@ -1737,7 +1736,7 @@ function renderSiteSelection() {
 
 	const hint = siteSelection.loaded
 		? ''
-		: '<p class="text-secondary small">These are the sites selected for this environment. Use Load Sites to see every site available in the remote environment and change the selection.</p>';
+		: '<p class="text-secondary small">These are the sites selected for this environment. Use Refresh Sites to get the current list of sites from the remote environment and change the selection. The selected sites stay selected.</p>';
 	const search = siteSelection.loaded
 		? '<input aria-label="Search sites" class="form-control form-control-sm" data-site-search placeholder="Search" type="text" value="' + escapeHTML(siteSelection.query) + '">'
 		: '';
@@ -1763,9 +1762,8 @@ function renderSiteTable() {
 		'<th class="table-cell-expand">Site Name</th><th>Remote Site ID</th></tr></thead><tbody>' +
 		(rows.length ? rows.map((row) => {
 			const site = row.site;
-			const missing = site.missing ? ' <span class="label label-warning" title="This site was not returned by the remote environment. It may have been deleted or the connection values may point to another environment."><span class="label-item label-item-expand">Not Found</span></span>' : '';
 			return '<tr' + (site.selected ? ' class="table-active"' : '') + '><td class="site-check">' + checkbox('aria-label="Select ' + escapeHTML(site.name) + '" data-site-toggle="' + row.index + '"', site.selected) + '</td>' +
-				'<td class="table-cell-expand"><span class="font-weight-semi-bold">' + escapeHTML(site.name) + '</span>' + missing + '</td>' +
+				'<td class="table-cell-expand"><span class="font-weight-semi-bold">' + escapeHTML(site.name) + '</span></td>' +
 				'<td>' + escapeHTML(site.siteId) + '</td></tr>';
 		}).join('') : '<tr><td class="text-center text-secondary" colspan="3">No sites match your search.</td></tr>') +
 		'</tbody></table>';
@@ -1786,6 +1784,7 @@ document.getElementById('loadSitesButton').addEventListener('click', () => {
 
 	siteSelection.error = null;
 	siteSelection.loading = true;
+	siteSelection.notice = null;
 	renderSiteSelection();
 
 	siteSelection.timer = setTimeout(() => {
@@ -1809,11 +1808,16 @@ document.getElementById('loadSitesButton').addEventListener('click', () => {
 				delete previous[remote.siteId];
 
 				return kept
-					? Object.assign({}, kept, {missing: false, name: remote.name})
+					? Object.assign({}, kept, {name: remote.name})
 					: {name: remote.name, selected: false, siteId: remote.siteId};
 			});
 
-			Object.keys(previous).forEach((siteId) => sites.push(Object.assign({}, previous[siteId], {missing: true})));
+			const removed = Object.keys(previous).map((siteId) => previous[siteId]);
+
+			siteSelection.notice = removed.length
+				? connectionAlert('warning', 'warning-full', 'Warning:', (removed.length === 1 ? 'This selected site no longer exists in the remote environment and was removed from the list: ' : 'These selected sites no longer exist in the remote environment and were removed from the list: ') +
+					removed.map((site) => '<strong>' + escapeHTML(site.name) + '</strong> (' + escapeHTML(site.siteId) + ')').join(', ') + '. Save to apply the change.')
+				: null;
 
 			siteSelection.loaded = true;
 			siteSelection.query = '';
@@ -1916,7 +1920,7 @@ document.getElementById('testConnectionButton').addEventListener('click', () => 
 
 		if (siteSelection.loaded || siteSelection.loading || siteSelection.error) {
 			clearTimeout(siteSelection.timer);
-			siteSelection = {error: null, loaded: false, loading: false, query: '', sites: siteSelection.sites.filter((site) => site.selected).map((site) => Object.assign({}, site, {missing: false})), timer: null};
+			siteSelection = {error: null, loaded: false, loading: false, notice: null, query: '', sites: siteSelection.sites.filter((site) => site.selected), timer: null};
 			renderSiteSelection();
 		}
 	});
